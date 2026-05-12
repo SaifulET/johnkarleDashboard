@@ -1,11 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import {
   AiChat01Icon,
   Alert01Icon,
+  AnalysisTextLinkIcon,
+  Analytics01Icon,
   ArrowDown01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
@@ -15,6 +17,7 @@ import {
   ChartBarLineIcon,
   CheckmarkCircle02Icon,
   CheckmarkSquare01Icon,
+  CreditCardPosIcon,
   DashboardSquare01Icon,
   DatabaseIcon,
   Download01Icon,
@@ -24,24 +27,33 @@ import {
   Invoice01Icon,
   LockPasswordIcon,
   Logout01Icon,
-  Mail01Icon,
+  MailReceive01Icon,
   Menu01Icon,
-  MessageQuestionIcon,
   MoneyReceive01Icon,
-  Notification03Icon,
+  Notification01Icon,
   Settings01Icon,
   Shield01Icon,
   Upload01Icon,
+  User03Icon,
   UserAdd01Icon,
   UserCircleIcon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
+import { AiInsightsContent } from "./components/ai-insights/AiInsightsContent";
+import { BulkEmailContent } from "./components/bulk-email/BulkEmailContent";
+import { CreateAdminContent } from "./components/create-admin/CreateAdminContent";
+import { ProfileContent } from "./components/profile/ProfileContent";
+import { ReportsContent } from "./components/reports/ReportsContent";
+import { SettingsContent } from "./components/settings/SettingsContent";
+import { SubscriptionBillingContent as SubscriptionBillingPage } from "./components/subscription-billing/SubscriptionBillingContent";
 
 type NavKey =
   | "dashboard"
   | "users"
   | "earning"
-  | "security"
+  | "billing"
+  | "insights"
+  | "admin"
   | "report"
   | "email"
   | "settings";
@@ -92,13 +104,16 @@ type TransactionRecord = {
   method: string;
 };
 
+
 const navItems: NavItem[] = [
   { key: "dashboard", label: "Dashboard", icon: DashboardSquare01Icon },
   { key: "users", label: "Users", icon: UserGroupIcon },
   { key: "earning", label: "Earning", icon: MoneyReceive01Icon },
-  { key: "security", label: "Security & Consent", icon: Shield01Icon },
-  { key: "report", label: "Report", icon: ChartBarLineIcon },
-  { key: "email", label: "Bulk Email", icon: Mail01Icon },
+  { key: "billing", label: "Subscription & Billing", icon: CreditCardPosIcon },
+  { key: "insights", label: "Ai Insights", icon: AnalysisTextLinkIcon },
+  { key: "admin", label: "Create Admin", icon: UserAdd01Icon },
+  { key: "report", label: "Report", icon: Analytics01Icon },
+  { key: "email", label: "Bulk Email", icon: MailReceive01Icon },
   { key: "settings", label: "Settings", icon: Settings01Icon },
 ];
 
@@ -487,28 +502,35 @@ const transactions: TransactionRecord[] = [
   },
 ];
 
+
 function Icon({
   icon,
+  size = 30,
   className = "",
 }: {
   icon: IconSvgElement;
+  size?: 20 | 30;
   className?: string;
 }) {
+  const dimensionClass = size === 20 ? "h-5 w-5" : "h-[30px] w-[30px]";
+
   return (
     <HugeiconsIcon
       icon={icon}
-      size={30}
+      size={size}
       strokeWidth={1.7}
-      className={`h-[30px] w-[30px] shrink-0 ${className}`}
+      className={`${dimensionClass} shrink-0 ${className}`}
     />
   );
 }
 
 export default function Home() {
-  const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
-  const [contentView, setContentView] = useState<"nav" | "notifications">(
-    "nav",
-  );
+  const [activeNav, setActiveNav] = useState<NavKey>("billing");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [contentView, setContentView] = useState<
+    "nav" | "notifications" | "profile"
+  >("nav");
 
   const activeLabel = useMemo(
     () => navItems.find((item) => item.key === activeNav)?.label ?? "Dashboard",
@@ -516,42 +538,90 @@ export default function Home() {
   );
 
   return (
-    <main className="min-h-screen min-w-[1180px] bg-[#FAFAF7] text-[#263029]">
+    <main className="min-h-screen bg-[#FAFAF7] text-[#263029]">
+      <div
+        aria-hidden="true"
+        className="fixed inset-x-0 top-0 z-10 h-[112px] bg-[#FAFAF7] md:h-[136px]"
+      />
+      {sidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-[#263029]/20 md:hidden"
+        />
+      ) : null}
       <Sidebar
         activeNav={activeNav}
+        isOpen={sidebarOpen}
+        onLogout={() => setLogoutOpen(true)}
         onChange={(key) => {
           setActiveNav(key);
           setContentView("nav");
+          setSidebarOpen(false);
         }}
       />
-      <Topbar onNotificationsClick={() => setContentView("notifications")} />
+      <Topbar
+        onMenuClick={() => setSidebarOpen((open) => !open)}
+        onNotificationsClick={() => setContentView("notifications")}
+        onProfileClick={() => setContentView("profile")}
+      />
 
-      <section className="pl-[352px] pr-8 pt-[136px] pb-8">
+      <section className="px-4 pb-6 pt-[112px] sm:px-6 md:pl-[352px] md:pr-8 md:pt-[136px] md:pb-8">
         {contentView === "notifications" ? (
           <NotificationsContent />
+        ) : contentView === "profile" ? (
+          <ProfileContent />
         ) : activeNav === "dashboard" ? (
           <DashboardContent />
         ) : activeNav === "users" ? (
           <UserManagementContent />
         ) : activeNav === "earning" ? (
           <EarningsManagementContent />
+        ) : activeNav === "billing" ? (
+          <SubscriptionBillingPage />
+        ) : activeNav === "insights" ? (
+          <AiInsightsContent />
+        ) : activeNav === "admin" ? (
+          <CreateAdminContent />
+        ) : activeNav === "report" ? (
+          <ReportsContent />
+        ) : activeNav === "email" ? (
+          <BulkEmailContent />
+        ) : activeNav === "settings" ? (
+          <SettingsContent />
         ) : (
           <PlaceholderContent title={activeLabel} />
         )}
       </section>
+      <LogoutConfirmModal
+        open={logoutOpen}
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={() => {
+          window.location.href = "/auth/signin";
+        }}
+      />
     </main>
   );
 }
 
 function Sidebar({
   activeNav,
+  isOpen,
+  onLogout,
   onChange,
 }: {
   activeNav: NavKey;
+  isOpen: boolean;
+  onLogout: () => void;
   onChange: (key: NavKey) => void;
 }) {
   return (
-    <aside className="fixed left-8 top-8 bottom-8 z-30 flex w-[288px] flex-col rounded-lg bg-white px-7 py-8 shadow-[0_18px_45px_rgba(31,47,40,0.08)]">
+    <aside
+      className={`fixed bottom-4 left-4 top-4 z-40 flex w-[min(calc(100vw-2rem),288px)] flex-col rounded-lg bg-white px-5 py-6 shadow-[0_18px_45px_rgba(31,47,40,0.14)] transition-transform duration-200 md:bottom-8 md:left-8 md:top-8 md:w-[288px] md:px-7 md:py-8 ${
+        isOpen ? "translate-x-0" : "-translate-x-[calc(100%+1rem)] md:translate-x-0"
+      }`}
+    >
       <div className="flex justify-center">
         <Image src="/logo.png" alt="Lineage.AI" width={150} height={126} />
       </div>
@@ -571,7 +641,7 @@ function Sidebar({
                   : "text-[#6D7A69] hover:bg-[#F2F4EE] hover:text-[#46624E]"
               }`}
             >
-              <Icon icon={item.icon} />
+              <Icon icon={item.icon} size={20} />
               <span className="leading-tight">{item.label}</span>
             </button>
           );
@@ -580,9 +650,10 @@ function Sidebar({
 
       <button
         type="button"
+        onClick={onLogout}
         className="flex min-h-[48px] items-center gap-3 rounded px-5 text-left text-[14px] font-medium text-[#FF8E8E] transition hover:bg-[#FFF2F2]"
       >
-        <Icon icon={Logout01Icon} />
+        <Icon icon={Logout01Icon} size={20} />
         <span>Logout</span>
       </button>
     </aside>
@@ -590,39 +661,43 @@ function Sidebar({
 }
 
 function Topbar({
+  onMenuClick,
   onNotificationsClick,
+  onProfileClick,
 }: {
+  onMenuClick: () => void;
   onNotificationsClick: () => void;
+  onProfileClick: () => void;
 }) {
   return (
-    <header className="fixed left-[352px] right-8 top-8 z-20 flex h-[72px] items-center justify-between rounded-lg bg-white px-6 shadow-[0_14px_35px_rgba(31,47,40,0.07)]">
-      <div className="flex items-center gap-5">
+    <header className="fixed left-4 right-4 top-4 z-20 flex h-[72px] items-center justify-between rounded-lg bg-white px-3 shadow-[0_14px_35px_rgba(31,47,40,0.07)] sm:px-5 md:left-[352px] md:right-8 md:top-8 md:px-6">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-5">
         <button
           type="button"
+          onClick={onMenuClick}
           aria-label="Toggle navigation"
           className="flex h-[42px] w-[42px] items-center justify-center rounded text-[#52614F] transition hover:bg-[#F2F4EE]"
         >
-          <Icon icon={Menu01Icon} />
+          <Icon icon={Menu01Icon} size={20} />
         </button>
-        <div>
-          <p className="text-[17px] font-bold leading-tight text-[#28322B]">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-bold leading-tight text-[#28322B] sm:text-[17px]">
             Welcome, James
           </p>
-          <p className="mt-1 text-[12px] font-medium text-[#7C837C]">
+          <p className="mt-1 hidden text-[12px] font-medium text-[#7C837C] sm:block">
             Have a nice day!
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <IconButton label="Messages" icon={MessageQuestionIcon} />
+      <div className="flex items-center gap-2 sm:gap-4">
         <IconButton
           label="Notifications"
-          icon={Notification03Icon}
+          icon={Notification01Icon}
           hasBadge
           onClick={onNotificationsClick}
         />
-        <IconButton label="Profile" icon={UserCircleIcon} />
+        <IconButton label="Profile" icon={User03Icon} onClick={onProfileClick} />
       </div>
     </header>
   );
@@ -647,7 +722,7 @@ function IconButton({
       title={label}
       className="relative flex h-12 w-12 items-center justify-center rounded-full border border-[#95A092] text-[#52614F] transition hover:bg-[#F2F4EE]"
     >
-      <Icon icon={icon} />
+      <Icon icon={icon} size={20} />
       {hasBadge ? (
         <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-white bg-[#FF4D4D]" />
       ) : null}
@@ -655,9 +730,49 @@ function IconButton({
   );
 }
 
+function LogoutConfirmModal({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-white/80 px-4">
+      <section className="w-full max-w-[380px] rounded-lg bg-white px-7 py-8 text-center shadow-[0_24px_70px_rgba(31,47,40,0.18)]">
+        <h2 className="text-[28px] font-bold leading-tight text-[#0F172A]">
+          Confirm logging out!
+        </h2>
+        <div className="mt-7 grid grid-cols-2 gap-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 rounded border border-[#5B5BFF] text-[14px] font-bold text-[#5B5BFF] transition hover:bg-[#F2F2FF]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="h-10 rounded bg-[#FF4B4B] text-[14px] font-bold text-white transition hover:bg-[#E84343]"
+          >
+            Yes, Confirm
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function NotificationsContent() {
   return (
-    <section className="max-w-[1090px]">
+    <section className="w-full">
       <div>
         <h1 className="text-[32px] font-bold leading-tight text-[#172235]">
           Notifications Center
@@ -672,7 +787,7 @@ function NotificationsContent() {
         {notifications.map((notification) => (
           <article
             key={notification.title}
-            className="grid min-h-[160px] grid-cols-[56px_1fr_auto] gap-5 rounded-lg border border-[#E6E6E0] bg-white px-7 py-7 shadow-[0_12px_30px_rgba(31,47,40,0.05)]"
+            className="grid min-h-[160px] gap-5 rounded-lg border border-[#E6E6E0] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(31,47,40,0.05)] sm:grid-cols-[56px_1fr_auto] sm:px-7 sm:py-7"
           >
             <span
               className={`mt-1 flex h-12 w-12 items-center justify-center rounded-full ${notification.iconClass}`}
@@ -680,7 +795,7 @@ function NotificationsContent() {
               <Icon icon={notification.icon} />
             </span>
 
-            <div className="max-w-[690px]">
+            <div className="min-w-0 max-w-[690px]">
               <h2 className="text-[16px] font-bold leading-6 text-[#263247]">
                 {notification.title}
               </h2>
@@ -707,7 +822,7 @@ function NotificationsContent() {
               </div>
             </div>
 
-            <p className="pt-1 text-right text-[13px] font-medium text-[#8A928B]">
+            <p className="pt-1 text-left text-[13px] font-medium text-[#8A928B] sm:text-right">
               {notification.time}
             </p>
           </article>
@@ -747,13 +862,13 @@ function DashboardContent() {
         </p>
       </section>
 
-      <section className="grid grid-cols-4 gap-6">
+      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
           <MetricCard key={metric.label} metric={metric} />
         ))}
       </section>
 
-      <section className="grid grid-cols-[2fr_0.96fr] gap-6">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_0.96fr]">
         <ActivityFeed />
         <SubscriptionInsights />
       </section>
@@ -762,7 +877,7 @@ function DashboardContent() {
         <h2 className="mb-4 text-[18px] font-bold text-[#2D384B]">
           AI System Health
         </h2>
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {health.map((item) => (
             <article
               key={item.label}
@@ -996,8 +1111,8 @@ function UserManagementContent() {
 
   return (
     <>
-      <section className="max-w-[1090px]">
-        <div className="flex items-start justify-between gap-6">
+      <section className="w-full">
+        <div className="flex flex-col items-stretch justify-between gap-5 xl:flex-row xl:items-start">
           <div>
             <h1 className="text-[30px] font-bold leading-tight text-[#172235]">
               User Management
@@ -1008,7 +1123,7 @@ function UserManagementContent() {
             </p>
           </div>
 
-          <div className="relative flex items-center gap-3 pt-9">
+          <div className="relative flex flex-wrap items-center gap-3 xl:pt-9">
             <div className="flex h-10 overflow-hidden rounded-lg border border-[#E2E6EA] bg-white p-1 shadow-sm">
               {(["All Users", "Internal"] as const).map((item) => (
                 <button
@@ -1058,7 +1173,7 @@ function UserManagementContent() {
             </button>
 
             {filtersOpen ? (
-              <div className="absolute right-[86px] top-[88px] z-10 w-[280px] rounded-lg border border-[#E0E3DE] bg-white p-5 shadow-[0_18px_45px_rgba(31,47,40,0.12)]">
+              <div className="absolute right-0 top-12 z-10 w-[min(calc(100vw-2rem),280px)] rounded-lg border border-[#E0E3DE] bg-white p-5 shadow-[0_18px_45px_rgba(31,47,40,0.12)] xl:right-[86px] xl:top-[88px]">
                 <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-[#6F826C]">
                   Table Filters
                 </p>
@@ -1117,7 +1232,8 @@ function UserManagementContent() {
         </div>
 
         <div className="mt-7 overflow-hidden rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-          <table className="w-full border-collapse text-left">
+          <div className="overflow-x-auto">
+          <table className="min-w-[900px] w-full border-collapse text-left">
             <thead className="bg-[#FBFBFA]">
               <tr className="text-[11px] font-bold uppercase tracking-wide text-[#7B827B]">
                 <th className="px-7 py-5">User Name</th>
@@ -1141,9 +1257,7 @@ function UserManagementContent() {
                         setSelectedUser(user);
                       }
                     }}
-                    className={`cursor-pointer border-t border-[#EFF0EC] transition hover:bg-[#F2F4EE] ${
-                      index === 0 ? "bg-[#EEF2EF]" : "bg-white"
-                    }`}
+                    className="cursor-pointer border-t border-[#EFF0EC] bg-white transition hover:bg-[#F2F4EE]"
                   >
                     <td className="px-7 py-5">
                       <div className="flex items-center gap-4">
@@ -1192,8 +1306,9 @@ function UserManagementContent() {
               )}
             </tbody>
           </table>
+          </div>
 
-          <div className="flex items-center justify-between border-t border-[#EFF0EC] px-7 py-5">
+          <div className="flex flex-col gap-4 border-t border-[#EFF0EC] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <p className="text-[12px] font-medium text-[#6F7670]">
               Showing {(currentPage - 1) * pageSize + (pageUsers.length ? 1 : 0)}{" "}
               to {(currentPage - 1) * pageSize + pageUsers.length} of{" "}
@@ -1318,171 +1433,205 @@ function UserDetailsDrawer({
   user: UserRecord | null;
   onClose: () => void;
 }) {
-  if (!user) {
+  const [displayUser, setDisplayUser] = useState<UserRecord | null>(user);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setDisplayUser(user);
+      const timeout = window.setTimeout(() => setIsVisible(true), 20);
+
+      return () => window.clearTimeout(timeout);
+    }
+
+    setIsVisible(false);
+    const timeout = window.setTimeout(() => setDisplayUser(null), 320);
+
+    return () => window.clearTimeout(timeout);
+  }, [user]);
+
+  if (!displayUser) {
     return null;
   }
 
-  const visibleProfiles = user.linkedProfiles.slice(0, 3);
-  const remainingProfiles = Math.max(0, user.linkedProfiles.length - 3);
+  const visibleProfiles = displayUser.linkedProfiles.slice(0, 3);
+  const remainingProfiles = Math.max(0, displayUser.linkedProfiles.length - 3);
 
   return (
-    <aside className="fixed right-0 top-0 z-50 flex h-screen w-[390px] flex-col border-l border-[#E6E6E0] bg-white shadow-[-18px_0_45px_rgba(31,47,40,0.12)]">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#ECEDEA] px-5">
-        <h2 className="text-[17px] font-bold text-[#334155]">User Details</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close user details"
-          className="flex h-9 w-9 items-center justify-center rounded text-[#334155] transition hover:bg-[#F2F4EE]"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} size={22} strokeWidth={1.8} />
-        </button>
-      </header>
+    <>
+      <button
+        type="button"
+        aria-label="Close user details"
+        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-[#263029]/20 transition-opacity duration-300 ease-out ${
+          isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      <aside
+        className={`fixed right-0 top-0 z-50 flex h-screen w-full flex-col border-l border-[#E6E6E0] bg-white shadow-[-18px_0_45px_rgba(31,47,40,0.12)] transition-transform duration-300 ease-out sm:w-[390px] ${
+          isVisible ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-[#ECEDEA] px-5">
+          <h2 className="text-[17px] font-bold text-[#334155]">User Details</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close user details"
+            className="flex h-9 w-9 items-center justify-center rounded text-[#334155] transition hover:bg-[#F2F4EE]"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} size={22} strokeWidth={1.8} />
+          </button>
+        </header>
 
-      <div className="flex-1 overflow-y-auto px-5 pb-8 pt-9">
-        <section className="flex flex-col items-center">
-          <Avatar user={user} size="lg" />
-          <h3 className="mt-4 text-[22px] font-bold text-[#2D384B]">
-            {user.name}
-          </h3>
-          <SubscriptionBadge plan={user.subscription} />
-        </section>
+        <div className="flex-1 overflow-y-auto px-5 pb-8 pt-9">
+          <section className="flex flex-col items-center">
+            <Avatar user={displayUser} size="lg" />
+            <h3 className="mt-4 text-[22px] font-bold text-[#2D384B]">
+              {displayUser.name}
+            </h3>
+            <SubscriptionBadge plan={displayUser.subscription} />
+          </section>
 
-        <section className="mt-7 rounded-lg bg-[#F6F7FF] p-5">
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#667085]">
-            Core Information
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
-            <InfoItem label="Email Address" value={user.contact} />
-            <InfoItem label="Phone Number" value={user.phone} />
-            <InfoItem label="Joined Date" value={user.joined} />
-            <InfoItem label="Region" value={user.region} />
-            <InfoItem label="Account ID" value={user.id} />
-            <InfoItem label="Risk Level" value={user.risk} />
-          </div>
-        </section>
-
-        <section className="mt-7">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-              Linked Profiles ({user.profiles})
+          <section className="mt-7 rounded-lg bg-[#F6F7FF] p-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+              Core Information
             </p>
-            <button
-              type="button"
-              className="text-[11px] font-bold text-[#46624E]"
-            >
-              View All
-            </button>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {visibleProfiles.map((profile) => (
-              <div
-                key={profile}
-                className="flex min-h-[48px] items-center gap-3 rounded-lg border border-[#E6E6E0] bg-white px-3"
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#21352C] text-[10px] font-bold text-white">
-                  {profile
-                    .split(" ")
-                    .map((part) => part[0])
-                    .join("")
-                    .slice(0, 2)}
-                </span>
-                <span className="text-[12px] font-bold text-[#334155]">
-                  {profile}
-                </span>
-              </div>
-            ))}
-            {remainingProfiles > 0 ? (
+            <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
+              <InfoItem label="Email Address" value={displayUser.contact} />
+              <InfoItem label="Phone Number" value={displayUser.phone} />
+              <InfoItem label="Joined Date" value={displayUser.joined} />
+              <InfoItem label="Region" value={displayUser.region} />
+              <InfoItem label="Account ID" value={displayUser.id} />
+              <InfoItem label="Risk Level" value={displayUser.risk} />
+            </div>
+          </section>
+
+          <section className="mt-7">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
+                Linked Profiles ({displayUser.profiles})
+              </p>
               <button
                 type="button"
-                className="min-h-[48px] rounded-lg border border-dashed border-[#C9CEC7] text-[12px] font-semibold text-[#6F7670]"
+                className="text-[11px] font-bold text-[#46624E]"
               >
-                +{remainingProfiles} more
+                View All
               </button>
-            ) : null}
-          </div>
-        </section>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {visibleProfiles.map((profile) => (
+                <div
+                  key={profile}
+                  className="flex min-h-[48px] items-center gap-3 rounded-lg border border-[#E6E6E0] bg-white px-3"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#21352C] text-[10px] font-bold text-white">
+                    {profile
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")
+                      .slice(0, 2)}
+                  </span>
+                  <span className="text-[12px] font-bold text-[#334155]">
+                    {profile}
+                  </span>
+                </div>
+              ))}
+              {remainingProfiles > 0 ? (
+                <button
+                  type="button"
+                  className="min-h-[48px] rounded-lg border border-dashed border-[#C9CEC7] text-[12px] font-semibold text-[#6F7670]"
+                >
+                  +{remainingProfiles} more
+                </button>
+              ) : null}
+            </div>
+          </section>
 
-        <section className="mt-7">
-          <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-            Billing History Overview
-          </p>
-          <div className="mt-4 space-y-4">
-            {user.billingHistory.map((item) => (
-              <div
-                key={`${item.invoice}-${item.date}`}
-                className="flex items-center justify-between text-[12px] font-bold text-[#334155]"
-              >
-                <span className="flex items-center gap-2">
-                  <HugeiconsIcon
-                    icon={Invoice01Icon}
-                    size={18}
-                    strokeWidth={1.8}
-                    className="text-[#667085]"
-                  />
-                  {item.invoice} - {item.date}
-                </span>
-                <span>{item.amount}</span>
-              </div>
-            ))}
-          </div>
-        </section>
+          <section className="mt-7">
+            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
+              Billing History Overview
+            </p>
+            <div className="mt-4 space-y-4">
+              {displayUser.billingHistory.map((item) => (
+                <div
+                  key={`${item.invoice}-${item.date}`}
+                  className="flex items-center justify-between text-[12px] font-bold text-[#334155]"
+                >
+                  <span className="flex items-center gap-2">
+                    <HugeiconsIcon
+                      icon={Invoice01Icon}
+                      size={18}
+                      strokeWidth={1.8}
+                      className="text-[#667085]"
+                    />
+                    {item.invoice} - {item.date}
+                  </span>
+                  <span>{item.amount}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <section className="mt-7 space-y-3">
-          <DrawerLink
-            icon={LockPasswordIcon}
-            title="2FA Enabled"
-            description="Protected via SMS"
-          />
-          <DrawerLink
-            icon={CheckmarkSquare01Icon}
-            title="Consents Agreement"
-            description="Privacy V2.1 Signed"
-          />
-          <DrawerLink
-            icon={Calendar01Icon}
-            title="Next Review"
-            description="Scheduled compliance check in 18 days"
-          />
-        </section>
+          <section className="mt-7 space-y-3">
+            <DrawerLink
+              icon={LockPasswordIcon}
+              title="2FA Enabled"
+              description="Protected via SMS"
+            />
+            <DrawerLink
+              icon={CheckmarkSquare01Icon}
+              title="Consents Agreement"
+              description="Privacy V2.1 Signed"
+            />
+            <DrawerLink
+              icon={Calendar01Icon}
+              title="Next Review"
+              description="Scheduled compliance check in 18 days"
+            />
+          </section>
 
-        <section className="mt-7 rounded-lg border border-[#E6E6E0] p-5">
-          <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-            Usage Summary
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <InfoStat label="Storage" value={user.storage} />
-            <InfoStat label="Memories" value={String(user.memories)} />
-            <InfoStat label="AI Chats" value={String(user.aiConversations)} />
-            <InfoStat label="Role" value={user.role} />
-          </div>
-        </section>
+          <section className="mt-7 rounded-lg border border-[#E6E6E0] p-5">
+            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
+              Usage Summary
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <InfoStat label="Storage" value={displayUser.storage} />
+              <InfoStat label="Memories" value={String(displayUser.memories)} />
+              <InfoStat
+                label="AI Chats"
+                value={String(displayUser.aiConversations)}
+              />
+              <InfoStat label="Role" value={displayUser.role} />
+            </div>
+          </section>
 
-        <section className="mt-7">
-          <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-            Recent Activity
-          </p>
-          <div className="mt-4 space-y-4">
-            {user.activityLog.map((item) => (
-              <div key={item} className="flex gap-3">
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#55725D]" />
-                <p className="text-[13px] font-medium leading-5 text-[#626A64]">
-                  {item}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
+          <section className="mt-7">
+            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
+              Recent Activity
+            </p>
+            <div className="mt-4 space-y-4">
+              {displayUser.activityLog.map((item) => (
+                <div key={item} className="flex gap-3">
+                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#55725D]" />
+                  <p className="text-[13px] font-medium leading-5 text-[#626A64]">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <button
-          type="button"
-          className="mt-10 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#E35757] text-[13px] font-bold text-[#D92D2D] transition hover:bg-[#FFF0F0]"
-        >
-          <HugeiconsIcon icon={CancelCircleIcon} size={18} strokeWidth={1.8} />
-          Suspend Account Access
-        </button>
-      </div>
-    </aside>
+          <button
+            type="button"
+            className="mt-10 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#E35757] text-[13px] font-bold text-[#D92D2D] transition hover:bg-[#FFF0F0]"
+          >
+            <HugeiconsIcon icon={CancelCircleIcon} size={18} strokeWidth={1.8} />
+            Suspend Account Access
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -1496,7 +1645,6 @@ function InfoItem({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 function InfoStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-[#FAFAF7] p-3">
@@ -1641,14 +1789,14 @@ function EarningsManagementContent() {
 
   return (
     <>
-      <section className="max-w-[1090px]">
-        <div className="grid h-[96px] grid-cols-3 items-center rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
+      <section className="w-full">
+        <div className="grid grid-cols-1 items-center rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)] sm:h-[96px] sm:grid-cols-3">
           <RevenueStat value="1.2k" label="Today" />
           <RevenueStat value="18.6K" label="This Month" divided />
           <RevenueStat value="4.9M" label="Total Revenue" divided />
         </div>
 
-        <div className="mt-8 flex items-start justify-between gap-6">
+        <div className="mt-8 flex flex-col items-stretch justify-between gap-5 xl:flex-row xl:items-start">
           <div>
             <h1 className="text-[30px] font-bold leading-tight text-[#172235]">
               Earnings Management
@@ -1658,7 +1806,7 @@ function EarningsManagementContent() {
             </p>
           </div>
 
-          <div className="relative flex items-center gap-3 pt-9">
+          <div className="relative flex flex-wrap items-center gap-3 xl:pt-9">
             <div className="flex h-10 overflow-hidden rounded-lg border border-[#E2E6EA] bg-white p-1 shadow-sm">
               {(["All Users", "Internal"] as const).map((item) => (
                 <button
@@ -1708,7 +1856,7 @@ function EarningsManagementContent() {
             </button>
 
             {filtersOpen ? (
-              <div className="absolute right-[86px] top-[88px] z-10 w-[280px] rounded-lg border border-[#E0E3DE] bg-white p-5 shadow-[0_18px_45px_rgba(31,47,40,0.12)]">
+              <div className="absolute right-0 top-12 z-10 w-[min(calc(100vw-2rem),280px)] rounded-lg border border-[#E0E3DE] bg-white p-5 shadow-[0_18px_45px_rgba(31,47,40,0.12)] xl:right-[86px] xl:top-[88px]">
                 <p className="text-[13px] font-bold uppercase tracking-[0.12em] text-[#6F826C]">
                   Transaction Filters
                 </p>
@@ -1773,7 +1921,8 @@ function EarningsManagementContent() {
         </div>
 
         <div className="mt-7 overflow-hidden rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-          <table className="w-full border-collapse text-left">
+          <div className="overflow-x-auto">
+          <table className="min-w-[900px] w-full border-collapse text-left">
             <thead className="bg-[#FBFBFA]">
               <tr className="text-[11px] font-bold uppercase tracking-wide text-[#7B827B]">
                 <th className="px-7 py-5">Users</th>
@@ -1797,9 +1946,7 @@ function EarningsManagementContent() {
                         setSelectedTransaction(transaction);
                       }
                     }}
-                    className={`cursor-pointer border-t border-[#EFF0EC] transition hover:bg-[#F2F4EE] ${
-                      index === 0 ? "bg-[#EEF2EF]" : "bg-white"
-                    }`}
+                    className="cursor-pointer border-t border-[#EFF0EC] bg-white transition hover:bg-[#F2F4EE]"
                   >
                     <td className="px-7 py-6">
                       <div className="flex items-center gap-4">
@@ -1880,8 +2027,9 @@ function EarningsManagementContent() {
               )}
             </tbody>
           </table>
+          </div>
 
-          <div className="flex items-center justify-between border-t border-[#EFF0EC] px-7 py-5">
+          <div className="flex flex-col gap-4 border-t border-[#EFF0EC] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <p className="text-[12px] font-medium text-[#6F7670]">
               Showing {(currentPage - 1) * pageSize + (pageTransactions.length ? 1 : 0)}{" "}
               to {(currentPage - 1) * pageSize + pageTransactions.length} of{" "}
@@ -1976,13 +2124,41 @@ function TransactionModal({
   onClose: () => void;
   onDownload: (transaction: TransactionRecord) => void;
 }) {
-  if (!transaction) {
+  const [displayTransaction, setDisplayTransaction] =
+    useState<TransactionRecord | null>(transaction);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    if (transaction) {
+      setDisplayTransaction(transaction);
+      const timeout = window.setTimeout(() => setIsVisible(true), 20);
+
+      return () => window.clearTimeout(timeout);
+    }
+
+    setIsVisible(false);
+    const timeout = window.setTimeout(() => setDisplayTransaction(null), 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [transaction]);
+
+  if (!displayTransaction) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-6">
-      <section className="w-full max-w-[520px] rounded bg-white px-14 py-10 shadow-[0_24px_70px_rgba(31,47,40,0.24)]">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/20 px-4 py-6 transition-opacity duration-300 ease-out sm:px-6 ${
+        isVisible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <section
+        className={`w-full max-w-[520px] rounded bg-white px-5 py-7 shadow-[0_24px_70px_rgba(31,47,40,0.24)] transition duration-300 ease-out sm:px-14 sm:py-10 ${
+          isVisible
+            ? "translate-y-0 scale-100 opacity-100"
+            : "translate-y-3 scale-95 opacity-0"
+        }`}
+      >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3 text-[#6D7F68]">
             <HugeiconsIcon
@@ -2005,17 +2181,23 @@ function TransactionModal({
         </div>
 
         <div className="mt-8 space-y-6 text-[16px]">
-          <ModalRow label="Transaction ID" value={transaction.id} />
-          <ModalRow label="Plans" value={transaction.plan} />
-          <ModalRow label="Date" value={transaction.modalDate} />
-          <ModalRow label="Name" value={transaction.userName} />
-          <ModalRow label="A/C number" value={transaction.accountNumber} />
-          <ModalRow label="Email" value={transaction.email} />
-          <ModalRow label="Payment method" value={transaction.method} />
-          <ModalRow label="Transaction amount" value={transaction.price} />
+          <ModalRow label="Transaction ID" value={displayTransaction.id} />
+          <ModalRow label="Plans" value={displayTransaction.plan} />
+          <ModalRow label="Date" value={displayTransaction.modalDate} />
+          <ModalRow label="Name" value={displayTransaction.userName} />
+          <ModalRow
+            label="A/C number"
+            value={displayTransaction.accountNumber}
+          />
+          <ModalRow label="Email" value={displayTransaction.email} />
+          <ModalRow label="Payment method" value={displayTransaction.method} />
+          <ModalRow
+            label="Transaction amount"
+            value={displayTransaction.price}
+          />
         </div>
 
-        <div className="mt-9 grid grid-cols-2 gap-5">
+        <div className="mt-9 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
           <button
             type="button"
             onClick={onClose}
@@ -2025,7 +2207,7 @@ function TransactionModal({
           </button>
           <button
             type="button"
-            onClick={() => onDownload(transaction)}
+            onClick={() => onDownload(displayTransaction)}
             className="h-10 rounded bg-[#64785E] text-[14px] font-bold text-white transition hover:bg-[#52684F]"
           >
             Download Invoice
@@ -2038,16 +2220,16 @@ function TransactionModal({
 
 function ModalRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[1fr_1fr] gap-8">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr] sm:gap-8">
       <p className="font-bold text-[#334155]">{label}</p>
-      <p className="text-right font-medium text-[#334155]">{value}</p>
+      <p className="font-medium text-[#334155] sm:text-right">{value}</p>
     </div>
   );
 }
 
 function PlaceholderContent({ title }: { title: string }) {
   return (
-    <section className="rounded-lg border border-[#E6E6E0] bg-white p-10 shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
+    <section className="rounded-lg border border-[#E6E6E0] bg-white p-6 shadow-[0_12px_30px_rgba(31,47,40,0.06)] sm:p-10">
       <p className="text-[14px] font-semibold uppercase tracking-[0.14em] text-[#6F826C]">
         {title}
       </p>
