@@ -632,7 +632,7 @@ function Sidebar({
         <Image src="/logo.png" alt="Lineage.AI" width={150} height={126} />
       </div>
 
-      <nav className="mt-9 flex flex-1 flex-col gap-3">
+      <nav className="mt-9 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
         {navItems.map((item) => {
           const isActive = item.key === activeNav;
 
@@ -652,16 +652,16 @@ function Sidebar({
             </button>
           );
         })}
-      </nav>
 
-      <button
-        type="button"
-        onClick={onLogout}
-        className="flex min-h-[48px] items-center gap-3 rounded px-5 text-left text-[14px] font-medium text-[#FF8E8E] transition hover:bg-[#FFF2F2]"
-      >
-        <Icon icon={Logout01Icon} size={20} />
-        <span>Logout</span>
-      </button>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex min-h-[50px] w-full items-center gap-3 rounded px-5 text-left text-[16px] font-medium text-[#FF8E8E] transition hover:bg-[#FFF2F2]"
+        >
+          <Icon icon={Logout01Icon} size={20} />
+          <span className="leading-tight">Logout</span>
+        </button>
+      </nav>
     </aside>
   );
 }

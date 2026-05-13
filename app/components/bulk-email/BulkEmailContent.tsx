@@ -153,10 +153,10 @@ export function BulkEmailContent() {
   }
 
   return (
-    <section className="grid w-full grid-cols-1 gap-6 xl:grid-cols-[minmax(360px,0.86fr)_1.22fr]">
+    <section className="grid w-full grid-cols-1 gap-6 font-[Inter,Arial,sans-serif] xl:grid-cols-[minmax(360px,0.86fr)_1.22fr]">
       <section className="overflow-hidden rounded-lg border border-[#E8EAE8] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
         <div className="px-5 py-5">
-          <h1 className="text-[18px] font-bold text-[#334155]">
+          <h1 className="text-[18px] font-semibold leading-6 text-[#191C1F]">
             Target Audience
           </h1>
           <label className="relative mt-4 block">
@@ -164,13 +164,13 @@ export function BulkEmailContent() {
               icon={Search01Icon}
               size={18}
               strokeWidth={1.8}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9AA5B5]"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]"
             />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search users by name or email"
-              className="h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] pl-11 pr-4 text-[13px] font-medium text-[#334155] outline-none transition focus:border-[#66785F] focus:bg-white"
+              className="h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] pl-11 pr-4 text-[14px] font-normal leading-[17px] text-[#334155] outline-none transition placeholder:text-[#6B7280] focus:border-[#66785F] focus:bg-white"
             />
           </label>
         </div>
@@ -184,7 +184,7 @@ export function BulkEmailContent() {
               <col className="w-[24%]" />
             </colgroup>
             <thead className="bg-[#FBFCFE]">
-              <tr className="text-[10px] font-bold uppercase tracking-wide text-[#98A1AE]">
+              <tr className="text-[12px] font-bold uppercase leading-4 tracking-[0.6px] text-[#94A3B8]">
                 <th className="px-4 py-4">
                   <span className="sr-only">Select</span>
                 </th>
@@ -200,7 +200,7 @@ export function BulkEmailContent() {
                 return (
                   <tr
                     key={person.id}
-                    className="border-t border-[#EFF0EC] text-[12px] font-semibold text-[#334155] transition hover:bg-[#F7F9F7]"
+                    className="border-t border-[#EFF0EC] text-[16px] font-normal leading-[19px] text-[#334155] transition hover:bg-[#F7F9F7]"
                   >
                     <td className="px-4 py-4">
                       <input
@@ -212,10 +212,12 @@ export function BulkEmailContent() {
                       />
                     </td>
                     <td className="px-3 py-4 align-middle">
-                      <span className="block leading-4">{person.name}</span>
+                      <span className="block leading-[19px]">
+                        {person.name}
+                      </span>
                     </td>
-                    <td className="px-3 py-4 align-middle text-[#7B8490]">
-                      <span className="block break-all leading-4">
+                    <td className="px-3 py-4 align-middle text-[#64748B]">
+                      <span className="block break-all leading-[19px]">
                         {person.email}
                       </span>
                     </td>
@@ -232,12 +234,12 @@ export function BulkEmailContent() {
 
       <section className="rounded-lg border border-[#E8EAE8] bg-white p-5 shadow-[0_12px_30px_rgba(31,47,40,0.06)] sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <h1 className="max-w-[190px] text-[18px] font-bold leading-6 text-[#334155]">
+          <h1 className="max-w-[190px] text-[18px] font-semibold leading-6 text-[#191C1F]">
             Compose Campaign
           </h1>
           <button
             type="button"
-            className="flex h-11 items-center justify-center gap-3 rounded-lg bg-[#66785F] px-8 text-[13px] font-bold text-white shadow-[0_5px_14px_rgba(31,47,40,0.18)] transition hover:bg-[#596B53]"
+            className="flex h-11 items-center justify-center gap-3 rounded-lg bg-[#66785F] px-8 text-[16px] font-normal leading-6 text-white shadow-[0_5px_14px_rgba(31,47,40,0.18)] transition hover:bg-[#596B53]"
           >
             <HugeiconsIcon icon={MailSend01Icon} size={18} strokeWidth={1.8} />
             Send Email
@@ -246,7 +248,7 @@ export function BulkEmailContent() {
 
         <div className="mt-7 space-y-5">
           <div>
-            <p className="text-[12px] font-semibold leading-4 text-[#6F7670]">
+            <p className="text-[14px] font-normal leading-5 text-[#475569]">
               Recipients ({selectedRecipients.length} selected)
             </p>
             <div className="mt-2 flex min-h-12 flex-wrap items-center gap-2 rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-3 py-2">
@@ -256,14 +258,14 @@ export function BulkEmailContent() {
                     key={person.id}
                     type="button"
                     onClick={() => toggleRecipient(person.id)}
-                    className="inline-flex min-h-7 items-center gap-2 rounded-md border border-[#DDE3EA] bg-white px-3 text-[11px] font-bold text-[#526052] transition hover:border-[#66785F]"
+                    className="inline-flex min-h-7 items-center gap-2 rounded-md border border-[#DDE3EA] bg-white px-3 text-[12px] font-medium leading-4 text-[#334155] transition hover:border-[#66785F]"
                   >
                     {person.name}
-                    <span className="text-[#A0A8A0]">x</span>
+                    <span className="text-[#94A3B8]">x</span>
                   </button>
                 ))
               ) : (
-                <span className="text-[12px] font-medium text-[#8A928B]">
+                <span className="text-[14px] font-normal text-[#94A3B8]">
                   Select recipients from the audience table.
                 </span>
               )}
@@ -280,17 +282,17 @@ export function BulkEmailContent() {
           />
 
           <label className="block">
-            <span className="text-[12px] font-semibold text-[#6F7670]">
+            <span className="text-[14px] font-normal leading-5 text-[#475569]">
               Email Subject
             </span>
             <input
               defaultValue="Exciting New Updates to Your Workspace"
-              className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[13px] font-bold text-[#334155] outline-none transition focus:border-[#66785F] focus:bg-white"
+              className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[14px] font-semibold leading-5 text-[#1E293B] outline-none transition focus:border-[#66785F] focus:bg-white"
             />
           </label>
 
           <div>
-            <p className="text-[12px] font-semibold text-[#6F7670]">
+            <p className="text-[14px] font-normal leading-5 text-[#475569]">
               Email Body
             </p>
             <div className="mt-2 overflow-hidden rounded-lg border border-[#E2E6EA] bg-white">
@@ -383,7 +385,7 @@ export function BulkEmailContent() {
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
-                className="min-h-[300px] px-7 py-7 text-[13px] font-medium leading-6 text-[#526052] outline-none [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
+                className="min-h-[300px] px-7 py-7 text-[14px] font-normal leading-[23px] text-[#334155] outline-none [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p:first-child]:text-[18px] [&_p:first-child]:font-bold [&_p:first-child]:leading-7 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-6"
               >
                 <p>
                   <strong>Hi there,</strong>
@@ -417,7 +419,7 @@ export function BulkEmailContent() {
           </div>
 
           <div>
-            <p className="text-[12px] font-semibold text-[#6F7670]">
+            <p className="text-[14px] font-normal leading-5 text-[#475569]">
               Attachments
             </p>
             <button
@@ -431,10 +433,10 @@ export function BulkEmailContent() {
               className="mt-2 flex min-h-[120px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-[#DCCBFF] bg-[#FCFAFF] text-center text-[#7B6E92] transition hover:border-[#BFA7F5] hover:bg-[#F8F3FF]"
             >
               <HugeiconsIcon icon={Attachment01Icon} size={28} strokeWidth={1.8} />
-              <span className="mt-3 text-[12px] font-bold">
+              <span className="mt-3 text-[14px] font-medium leading-5 text-[#475569]">
                 Click to upload or drag and drop
               </span>
-              <span className="mt-1 text-[10px] font-medium">
+              <span className="mt-1 text-[12px] font-normal leading-4 text-[#94A3B8]">
                 PDF, JPG, PNG, MP3 or ZIP (max. 10MB)
               </span>
             </button>
@@ -471,14 +473,14 @@ export function BulkEmailContent() {
 function StatusPill({ status }: { status: EmailAudience["status"] }) {
   const className =
     status === "Active"
-      ? "bg-[#E2F4E7] text-[#27A15B]"
+      ? "bg-[#E2F4E7] text-[#15803D]"
       : status === "Trial"
-        ? "bg-[#FFF4C8] text-[#C5901F]"
-        : "bg-[#EDF1F6] text-[#667085]";
+        ? "bg-[#FFF4C8] text-[#B45309]"
+        : "bg-[#EDF1F6] text-[#64748B]";
 
   return (
     <span
-      className={`inline-flex min-h-6 items-center justify-center rounded-full px-3 text-[9px] font-bold uppercase leading-none ${className}`}
+      className={`inline-flex min-h-6 items-center justify-center rounded-full px-3 text-[10px] font-bold uppercase leading-3 ${className}`}
     >
       {status}
     </span>
@@ -488,8 +490,10 @@ function StatusPill({ status }: { status: EmailAudience["status"] }) {
 function FormSelect({ label, options }: { label: string; options: string[] }) {
   return (
     <label className="block">
-      <span className="text-[12px] font-semibold text-[#6F7670]">{label}</span>
-      <select className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[13px] font-bold text-[#334155] outline-none transition focus:border-[#66785F] focus:bg-white">
+      <span className="text-[14px] font-normal leading-5 text-[#475569]">
+        {label}
+      </span>
+      <select className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[14px] font-normal leading-5 text-[#191C1F] outline-none transition focus:border-[#66785F] focus:bg-white">
         {options.map((option) => (
           <option key={option}>{option}</option>
         ))}
@@ -518,7 +522,7 @@ function ToolbarButton({
         event.preventDefault();
         onClick();
       }}
-      className={`flex h-8 min-w-8 items-center justify-center rounded px-2 text-[13px] font-bold text-[#263029] transition hover:bg-[#EEF2EE] ${className}`}
+      className={`flex h-8 min-w-8 items-center justify-center rounded px-2 text-[13px] font-bold text-[#191C1F] transition hover:bg-[#EEF2EE] ${className}`}
     >
       {children}
     </button>
@@ -537,13 +541,13 @@ function AttachmentCard({
   onRemove: () => void;
 }) {
   return (
-    <div className="inline-flex max-w-full items-center gap-3 rounded-lg border border-[#E5E8EA] bg-white px-3 py-2 text-[11px] font-bold text-[#334155]">
-      <span className="flex h-8 w-9 shrink-0 items-center justify-center rounded bg-[#EEF2FF] text-[10px] text-[#66785F]">
+    <div className="inline-flex max-w-full items-center gap-3 rounded-lg border border-[#E5E8EA] bg-white px-3 py-2 text-[11px] font-bold leading-[14px] text-[#334155]">
+      <span className="flex h-8 w-9 shrink-0 items-center justify-center rounded bg-[#EEF2FF] text-[10px] text-[#2563EB]">
         {getFileLabel(file.name)}
       </span>
       <span className="min-w-0">
         <span className="block max-w-[180px] truncate">{file.name}</span>
-        <span className="block text-[9px] font-semibold text-[#8A928B]">
+        <span className="block text-[10px] font-normal leading-[15px] text-[#94A3B8]">
           {formatFileSize(file.size)}
         </span>
       </span>
