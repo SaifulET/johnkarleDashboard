@@ -103,6 +103,15 @@ export function ServicePlanEditor({
     : isView
       ? "Review plan details and limits. This view is locked from editing."
       : "Modify the details and limits for this service plan. Changes will take effect for new subscribers immediately.";
+  const subscriberCount = Number(form.activeSubscribers.replace(/,/g, "")) || 0;
+  const subscriberProgress = subscriberCount > 0 ? 75 : 0;
+  const primaryActionLabel = isView
+    ? "Edit Plan"
+    : isAdd
+      ? "Save New Plan"
+      : "Save Plan Changes";
+  const secondaryActionLabel = isView ? "Back to Plans" : "Cancel & Discard";
+  const pricePrefix = form.price === "Custom" ? undefined : "$";
 
   return (
     <section className="w-full">
@@ -130,13 +139,14 @@ export function ServicePlanEditor({
         </p>
       </div>
 
-      <div
-        className={`mt-7 grid gap-6 ${
-          isAdd ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-[1fr_250px]"
-        }`}
-      >
-        <div className="space-y-5">
-          <PlanFormSection title="Basic Information" icon={Invoice01Icon}>
+      <div className="mt-7 grid w-full gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,308px)] xl:items-start">
+        <div className="space-y-6">
+          <PlanFormSection
+            className="min-h-[334px]"
+            contentClassName="gap-x-4 gap-y-4"
+            title="Basic Info"
+            icon={Invoice01Icon}
+          >
             <PlanTextField
               className="sm:col-span-2"
               label="Plan Name"
@@ -147,6 +157,7 @@ export function ServicePlanEditor({
             <PlanTextField
               hint="Nominal fee between $2.00 - $3.00"
               label="Monthly Price (USD)"
+              prefix={pricePrefix}
               readOnly={isView}
               value={form.price}
               onChange={(value) => updateForm("price", value)}
@@ -160,7 +171,12 @@ export function ServicePlanEditor({
             />
           </PlanFormSection>
 
-          <PlanFormSection title="Resource Limits" icon={DatabaseIcon}>
+          <PlanFormSection
+            className="min-h-[212px]"
+            contentClassName="gap-x-4"
+            title="Usage Limits"
+            icon={DatabaseIcon}
+          >
             <PlanTextField
               label="Storage Limit (GB)"
               readOnly={isView}
@@ -176,131 +192,101 @@ export function ServicePlanEditor({
               onChange={(value) => updateForm("userLimit", value)}
             />
           </PlanFormSection>
-
-          <PlanFormSection
-            badge={`${form.selectedFeatures.length} Selected`}
-            icon={CheckmarkCircle02Icon}
-            title="Included Features"
-          >
-            <div className="col-span-1 grid grid-cols-1 gap-3 sm:col-span-2 sm:grid-cols-2">
-              {planFeatureOptions.map((feature) => {
-                const selected = form.selectedFeatures.includes(feature);
-
-                return (
-                  <button
-                    key={feature}
-                    type="button"
-                    disabled={isView}
-                    onClick={() => toggleFeature(feature)}
-                    className={`flex h-12 items-center gap-3 rounded-lg border px-4 text-left text-[13px] font-bold transition disabled:cursor-default ${
-                      selected
-                        ? "border-[#8AA08A] bg-[#F8FBF8] text-[#334155]"
-                        : "border-[#D7DDD5] bg-white text-[#687168]"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded border ${
-                        selected
-                          ? "border-[#46624E] bg-[#46624E] text-white"
-                          : "border-[#C7CEC5] bg-white text-transparent"
-                      }`}
-                    >
-                      <HugeiconsIcon
-                        icon={CheckmarkSquare01Icon}
-                        size={14}
-                        strokeWidth={2}
-                      />
-                    </span>
-                    {feature}
-                  </button>
-                );
-              })}
-            </div>
-          </PlanFormSection>
         </div>
 
-        {!isAdd ? (
-          <aside className="space-y-4">
-            <section className="rounded-lg border border-[#E6E6E0] bg-white p-6 shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-              <h2 className="text-[15px] font-bold text-[#334155]">
-                Plan Health
-              </h2>
-              <div className="mt-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-[#8A928B]">
+        <aside className="space-y-6">
+          <section className="min-h-[236px] rounded-[16px] border border-[rgba(194,200,192,0.3)] bg-white p-8">
+            <h2 className="text-[20px] font-medium leading-[30px] text-[#111C2D]">
+              Plan Health
+            </h2>
+            <div className="mt-4 space-y-4">
+              <div className="space-y-1">
+                <div className="flex items-start justify-between gap-4 text-[13px] leading-5">
+                  <span className="font-normal text-[#424843]">
                     Active Subscribers
                   </span>
-                  <span className="text-[12px] font-bold text-[#334155]">
+                  <span className="font-bold text-[#111C2D]">
                     {form.activeSubscribers}
                   </span>
                 </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#EEF0FA]">
-                  <div className="h-full w-[68%] rounded-full bg-[#46624E]" />
+                <div className="h-2 overflow-hidden rounded-full bg-[#E8EEFF]">
+                  <div
+                    className="h-full rounded-full bg-[#46624E]"
+                    style={{ width: `${subscriberProgress}%` }}
+                  />
                 </div>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <PlanHealthMini label="Churn Rate" value={form.churnRate} />
                 <PlanHealthMini label="MRR" value={form.mrr} />
               </div>
-            </section>
+            </div>
+          </section>
 
-            {isView ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onEdit(form)}
-                  className="h-12 w-full rounded-lg bg-[#46624E] text-[13px] font-bold text-white transition hover:bg-[#3C5544]"
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={isView ? () => onEdit(form) : handleSave}
+              className="flex h-14 w-full items-center justify-center rounded-[12px] bg-[#46624E] px-4 text-center text-[16px] font-bold leading-6 text-white shadow-[0_10px_15px_-3px_rgba(70,98,78,0.1),0_4px_6px_-4px_rgba(70,98,78,0.1)] transition hover:bg-[#3C5544]"
+            >
+              {primaryActionLabel}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex h-[58px] w-full items-center justify-center rounded-[12px] border border-[#C2C8C0] bg-[#F9F9FF] px-4 text-center text-[16px] font-medium leading-6 text-[#424843] transition hover:bg-[#F2F4EE]"
+            >
+              {secondaryActionLabel}
+            </button>
+            <p className="px-4 pt-2 text-center text-[13px] font-normal leading-5 text-[#424843]">
+              Last edited by Alex Thorne on Oct 24, 2023. This action will be
+              logged in the system audit trail.
+            </p>
+          </div>
+        </aside>
+
+        <PlanFormSection
+          badge={`${form.selectedFeatures.length} Selected`}
+          className="min-h-[403px] xl:col-span-2"
+          contentClassName="gap-3 sm:grid-cols-2"
+          icon={CheckmarkCircle02Icon}
+          title="Features Multi-Select"
+        >
+          {planFeatureOptions.map((feature) => {
+            const selected = form.selectedFeatures.includes(feature);
+
+            return (
+              <button
+                key={feature}
+                type="button"
+                disabled={isView}
+                onClick={() => toggleFeature(feature)}
+                className={`flex min-h-[58px] items-center gap-3 rounded-[12px] border px-[15px] py-4 text-left text-[16px] font-normal leading-6 text-[#111C2D] transition disabled:cursor-default ${
+                  selected
+                    ? "border-[#46624E] bg-[rgba(94,123,101,0.05)]"
+                    : "border-[#C2C8C0] bg-white"
+                }`}
+              >
+                <span
+                  className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded ${
+                    selected
+                      ? "bg-[#46624E] text-white"
+                      : "border border-[#727972] bg-white text-transparent"
+                  }`}
                 >
-                  Edit Plan
-                </button>
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  className="h-12 w-full rounded-lg border border-[#D7DDD5] bg-white text-[13px] font-bold text-[#5F675F] transition hover:bg-[#F2F4EE]"
-                >
-                  Back to Plans
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="h-12 w-full rounded-lg bg-[#46624E] text-[13px] font-bold text-white transition hover:bg-[#3C5544]"
-                >
-                  Save Plan Changes
-                </button>
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  className="h-12 w-full rounded-lg border border-[#D7DDD5] bg-white text-[13px] font-bold text-[#5F675F] transition hover:bg-[#F2F4EE]"
-                >
-                  Cancel & Discard
-                </button>
-              </>
-            )}
-          </aside>
-        ) : null}
+                  <HugeiconsIcon
+                    icon={CheckmarkSquare01Icon}
+                    size={16}
+                    strokeWidth={2}
+                  />
+                </span>
+                <span className="min-w-0">{feature}</span>
+              </button>
+            );
+          })}
+        </PlanFormSection>
       </div>
 
-      {isAdd ? (
-        <div className="mt-6 flex flex-col justify-end gap-4 sm:flex-row">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-12 rounded-lg border border-[#D7DDD5] bg-white px-8 text-[13px] font-bold text-[#5F675F] transition hover:bg-[#F2F4EE]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="h-12 rounded-lg bg-[#46624E] px-9 text-[13px] font-bold text-white transition hover:bg-[#3C5544]"
-          >
-            Save
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -31,6 +31,7 @@ import {
   Menu01Icon,
   MoneyReceive01Icon,
   Notification01Icon,
+  Wrench01Icon,
   Settings01Icon,
   Shield01Icon,
   Upload01Icon,
@@ -41,6 +42,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { AiInsightsContent } from "./components/ai-insights/AiInsightsContent";
 import { BulkEmailContent } from "./components/bulk-email/BulkEmailContent";
+import { ConfigureContent } from "./components/configure/ConfigureContent";
 import { CreateAdminContent } from "./components/create-admin/CreateAdminContent";
 import { ProfileContent } from "./components/profile/ProfileContent";
 import { ReportsContent } from "./components/reports/ReportsContent";
@@ -56,6 +58,7 @@ type NavKey =
   | "admin"
   | "report"
   | "email"
+  | "configure"
   | "settings";
 
 type NavItem = {
@@ -114,6 +117,7 @@ const navItems: NavItem[] = [
   { key: "admin", label: "Create Admin", icon: UserAdd01Icon },
   { key: "report", label: "Report", icon: Analytics01Icon },
   { key: "email", label: "Bulk Email", icon: MailReceive01Icon },
+  { key: "configure", label: "Configure", icon: Wrench01Icon },
   { key: "settings", label: "Settings", icon: Settings01Icon },
 ];
 
@@ -152,29 +156,29 @@ const activities = [
   {
     title: "New profile created for Elias Vance",
     time: "Today at 10:42 AM",
-    tone: "bg-[#4D7359]",
+    tone: "bg-[#46624E]",
   },
   {
     title: 'Memory "First Steps" uploaded',
     time: "Today at 09:15 AM",
-    tone: "bg-[#A6D8B6]",
+    tone: "bg-[#CAEAD5]",
   },
   {
     title: "Invite accepted by Sarah Chen",
     time: "Yesterday at 04:30 PM",
-    tone: "bg-[#C8C2E6]",
+    tone: "bg-[#E9DDFD]",
   },
   {
     title: "AI conversation flagged for emotional review",
     time: "Yesterday at 02:11 PM",
-    tone: "bg-[#F0A7A7]",
+    tone: "bg-[#FFDAD6]",
   },
 ];
 
 const plans = [
-  { label: "Pro Plan", value: "6,240", color: "bg-[#55725D]" },
-  { label: "Basic Plan", value: "4,120", color: "bg-[#809A82]" },
-  { label: "Legacy", value: "850", color: "bg-[#84809B]" },
+  { label: "Pro Plan", value: "6,240", color: "bg-[#46624E]" },
+  { label: "Basic Plan", value: "4,120", color: "bg-[#486554]" },
+  { label: "Legacy", value: "850", color: "bg-[#605872]" },
 ];
 
 const health = [
@@ -588,6 +592,8 @@ export default function Home() {
           <ReportsContent />
         ) : activeNav === "email" ? (
           <BulkEmailContent />
+        ) : activeNav === "configure" ? (
+          <ConfigureContent />
         ) : activeNav === "settings" ? (
           <SettingsContent />
         ) : (
@@ -868,7 +874,7 @@ function DashboardContent() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_0.96fr]">
+      <section className="grid grid-cols-1 gap-6 xl:h-[505.77px] xl:grid-cols-[minmax(0,1fr)_316px]">
         <ActivityFeed />
         <SubscriptionInsights />
       </section>
@@ -957,33 +963,63 @@ function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
 
 function ActivityFeed() {
   return (
-    <article className="min-h-[420px] rounded-lg border border-[#E6E6E0] bg-white p-8 shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-      <div className="flex items-center justify-between">
-        <h2 className="text-[18px] font-bold text-[#2D384B]">
+    <article className="flex h-[505.75px] flex-col items-start gap-6 rounded-[16px] border border-[#E8E6E1] bg-white px-8 pb-[165.39px] pt-8 shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
+      <div className="flex h-[30px] w-full items-center justify-between gap-6">
+        <h2 className="flex h-[30px] items-center text-[20px] font-medium leading-[30px] text-[#111C2D]">
           Recent Activity Feed
         </h2>
         <button
           type="button"
-          className="text-[13px] font-semibold text-[#7A8B72] hover:text-[#46624E]"
+          className="flex h-[25.59px] items-center text-center text-[16px] font-normal leading-[26px] text-[#46624E] hover:text-[#314D3D]"
         >
           View All
         </button>
       </div>
 
-      <div className="mt-6 space-y-6">
+      <div className="relative flex h-[252.36px] w-full flex-col items-start gap-6">
+        <span className="absolute bottom-[7.98px] left-[11px] top-2 w-px bg-[#C2C8C0]" />
         {activities.map((activity, index) => (
-          <div key={activity.title} className="relative flex gap-4">
-            {index < activities.length - 1 ? (
-              <span className="absolute left-[9px] top-6 h-[42px] w-px bg-[#D7DED4]" />
-            ) : null}
+          <div
+            key={activity.title}
+            className="relative z-[1] flex h-[45.09px] w-full items-start pl-8"
+          >
             <span
-              className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${activity.tone}`}
-            />
-            <div>
-              <p className="text-[14px] font-bold leading-5 text-[#303B4A]">
+              className={`absolute left-0 top-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${activity.tone}`}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 13 10"
+                className={`h-[9.33px] ${
+                  index === 2 ? "w-[11.67px]" : "w-[12.83px]"
+                } ${
+                  index === 0
+                    ? "text-white"
+                    : index === 2
+                      ? "text-[#605872]"
+                      : index === 3
+                        ? "text-[#BA1A1A]"
+                        : "text-[#46624E]"
+                }`}
+              >
+                <path
+                  d="M1 5.1 4.6 8.5 12 1"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <p
+                className={`truncate text-[16px] leading-[26px] text-[#111C2D] ${
+                  index === 0 ? "font-bold" : "font-normal"
+                }`}
+              >
                 {activity.title}
               </p>
-              <p className="mt-1 text-[12px] text-[#8D958E]">
+              <p className="text-[13px] font-normal leading-5 text-[#424843] opacity-60">
                 {activity.time}
               </p>
             </div>
@@ -996,37 +1032,41 @@ function ActivityFeed() {
 
 function SubscriptionInsights() {
   return (
-    <article className="min-h-[420px] rounded-lg border border-[#E6E6E0] bg-white p-8 shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-      <h2 className="text-[18px] font-bold text-[#2D384B]">
+    <article className="flex h-[505.77px] flex-col items-start gap-[23px] rounded-[16px] border border-[#E8E6E1] bg-white p-8 shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
+      <h2 className="flex h-[30px] w-full items-center text-[20px] font-medium leading-[30px] text-[#111C2D]">
         Subscription Insights
       </h2>
-      <p className="mt-8 text-[14px] font-medium text-[#7B827B]">
-        Current MRR
-      </p>
-      <p className="mt-2 text-[30px] font-bold text-[#1F2937]">$142,480</p>
+      <div className="flex w-full flex-col items-start gap-[3.01px]">
+        <p className="flex h-[26.59px] w-full items-center text-[16px] font-normal leading-[26px] text-[#424843]">
+          Current MRR
+        </p>
+        <p className="flex h-[45.8px] w-full items-center text-[32px] font-semibold leading-[45px] tracking-[-0.64px] text-[#111C2D]">
+          $142,480
+        </p>
+      </div>
 
-      <div className="mt-8 space-y-4">
+      <div className="flex w-full flex-col items-start gap-4 py-[9px]">
         {plans.map((plan) => (
           <div
             key={plan.label}
-            className="flex min-h-[44px] items-center justify-between rounded-lg bg-[#EEF2FF] px-4 text-[14px] font-semibold text-[#344052]"
+            className="flex h-[49.59px] w-full items-center justify-between rounded-[12px] bg-[#F0F3FF] p-3 text-[16px] leading-[26px] text-[#111C2D]"
           >
-            <span className="flex items-center gap-3">
+            <span className="flex items-center gap-3 font-normal">
               <span className={`h-3 w-3 rounded-full ${plan.color}`} />
               {plan.label}
             </span>
-            <span>{plan.value}</span>
+            <span className="font-bold">{plan.value}</span>
           </div>
         ))}
       </div>
 
-      <div className="mt-8 border-t border-[#E6E6E0] pt-6">
-        <div className="flex items-center justify-between text-[14px] font-semibold">
-          <span className="text-[#7B827B]">Trial Conversions</span>
-          <span className="text-[#607560]">12.5%</span>
+      <div className="flex h-[66.59px] w-full flex-col items-start gap-2 border-t border-[#E8E6E1] pt-6">
+        <div className="flex h-[25.59px] w-full items-center justify-between text-[16px] leading-[26px]">
+          <span className="font-normal text-[#424843]">Trial Conversions</span>
+          <span className="font-bold text-[#46624E]">12.5%</span>
         </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#E5E2D9]">
-          <div className="h-full w-[18%] rounded-full bg-[#55725D]" />
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[#F5F2EB]">
+          <div className="h-full w-[12.5%] bg-[#46624E]" />
         </div>
       </div>
     </article>

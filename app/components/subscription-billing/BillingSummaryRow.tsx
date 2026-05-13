@@ -10,13 +10,13 @@ export function BillingSummaryRow({
   danger = false,
 }: BillingSummaryRowProps) {
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-5">
-      <p className="text-[13px] font-semibold leading-5 text-[#737B74]">
+    <div className="flex w-full items-center justify-between gap-4">
+      <p className="text-[15px] font-normal leading-6 text-[#424843]">
         {label}
       </p>
       <p
-        className={`text-right text-[13px] font-bold leading-5 ${
-          danger ? "text-[#D54E4E]" : "text-[#28334A]"
+        className={`text-right text-[15px] font-semibold leading-6 ${
+          danger ? "text-[#BA1A1A]" : "text-[#111C2D]"
         }`}
       >
         {value}

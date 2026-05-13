@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Add01Icon,
   Alert01Icon,
   Edit02Icon,
   EyeIcon,
@@ -91,9 +90,9 @@ export function SubscriptionBillingContent() {
         />
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
-          <h2 className="text-[18px] font-bold text-[#5B735F]">
+      <div className="mt-8 flex h-[320px] flex-col items-start gap-0 overflow-hidden rounded-[16px] border border-[rgba(194,200,192,0.3)] bg-white shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
+        <div className="flex h-[85px] w-full items-center justify-between gap-6 border-b border-[rgba(194,200,192,0.3)] px-8 py-5">
+          <h2 className="flex h-[30px] items-center text-[20px] font-medium leading-[30px] text-[#46624E]">
             Service Plan Distribution
           </h2>
           <button
@@ -102,59 +101,75 @@ export function SubscriptionBillingContent() {
               setSelectedPlan(null);
               setScreen("add");
             }}
-            className="flex h-11 items-center gap-2 rounded-lg bg-[#46624E] px-5 text-[13px] font-bold text-white transition hover:bg-[#3C5544]"
+            className="flex h-11 w-[140.36px] items-center justify-center rounded-[12px] bg-[#46624E] px-5 py-2.5 text-center text-[15px] font-medium leading-6 text-white transition hover:bg-[#3C5544]"
           >
-            <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={1.8} />
             Add New Plan
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-        <table className="min-w-[840px] w-full border-collapse text-left">
-          <thead className="bg-[#EEF2FF]">
-            <tr className="text-[12px] font-bold uppercase tracking-wide text-[#7B827B]">
-              <th className="px-7 py-4">Plan Name</th>
-              <th className="px-5 py-4">Price</th>
-              <th className="px-5 py-4">Storage Limit</th>
-              <th className="px-5 py-4">User Count</th>
-              <th className="px-5 py-4">Conversion Rate</th>
-              <th className="px-5 py-4 text-right">Action</th>
+        <div className="w-full overflow-x-auto">
+        <table className="h-[233px] min-w-[1080px] w-full table-fixed border-collapse text-left">
+          <colgroup>
+            <col className="w-[236.22px]" />
+            <col className="w-[112.84px]" />
+            <col className="w-[192.66px]" />
+            <col className="w-[170.86px]" />
+            <col className="w-[225.42px]" />
+            <col className="w-[142px]" />
+          </colgroup>
+          <thead className="h-[52px] bg-[#F0F3FF]">
+            <tr className="h-[52px] text-[16px] font-semibold uppercase leading-[19px] tracking-[0.8px] text-[#727972]">
+              <th className="h-[52px] px-8 py-4 font-semibold">Plan Name</th>
+              <th className="h-[52px] px-6 py-4 text-center font-semibold">Price</th>
+              <th className="h-[52px] px-6 py-4 text-center font-semibold">Storage Limit</th>
+              <th className="h-[52px] px-6 py-4 text-center font-semibold">User Count</th>
+              <th className="h-[52px] px-6 py-4 text-right font-semibold">Conversion Rate</th>
+              <th className="h-[52px] px-6 py-4 text-right font-semibold">Action</th>
             </tr>
           </thead>
           <tbody>
             {plans.map((plan, index) => (
-              <tr key={plan.id} className="border-t border-[#EFF0EC] bg-white">
-                <td className="px-7 py-5">
-                  <div className="flex items-center gap-3">
+              <tr
+                key={plan.id}
+                className={`bg-white ${
+                  index === 0
+                    ? "h-[60px]"
+                    : index === 1
+                      ? "h-[62px] border-t border-[rgba(194,200,192,0.3)]"
+                      : "h-[61px] border-t border-[rgba(194,200,192,0.3)]"
+                }`}
+              >
+                <td className="h-full pl-8 pr-6">
+                  <div className="flex h-5 items-center gap-3">
                     <span
                       className={`h-2 w-2 rounded-full ${
                         index === 0
-                          ? "bg-[#5C775F]"
+                          ? "bg-[#486554]"
                           : index === 1
-                            ? "bg-[#7E987F]"
-                            : "bg-[#69667E]"
+                            ? "bg-[#5E7B65]"
+                            : "bg-[#4B435C]"
                       }`}
                     />
-                    <span className="text-[13px] font-bold text-[#28334A]">
+                    <span className="text-[16px] font-medium leading-[19px] text-[#111C2D]">
                       {plan.name}
                     </span>
                   </div>
                 </td>
-                <td className="px-5 py-5 text-[13px] font-bold text-[#687168]">
+                <td className="h-full px-6 py-5 text-center text-[16px] font-normal leading-[19px] text-[#424843]">
                   {plan.price === "Custom" ? "Custom" : `$${plan.price}/mo`}
                 </td>
-                <td className="px-5 py-5 text-[13px] font-semibold text-[#687168]">
+                <td className="h-full px-6 py-5 text-center text-[16px] font-normal leading-[19px] text-[#424843]">
                   {plan.storageLimit === "Unlimited"
                     ? "Unlimited"
                     : `${plan.storageLimit} GB`}
                 </td>
-                <td className="px-5 py-5 text-[13px] font-semibold text-[#687168]">
+                <td className="h-full px-6 py-5 text-center text-[16px] font-normal leading-[19px] text-[#424843]">
                   {plan.userCount}
                 </td>
-                <td className="px-5 py-5 text-[13px] font-bold text-[#6E8A71]">
+                <td className="h-full px-6 py-5 text-right text-[16px] font-medium leading-[19px] text-[#46624E]">
                   {plan.conversionRate}
                 </td>
-                <td className="px-5 py-5">
+                <td className="h-full px-6 py-5">
                   <div className="flex justify-end gap-3 text-[#647064]">
                     <button
                       type="button"
@@ -187,79 +202,105 @@ export function SubscriptionBillingContent() {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_410px]">
-        <section className="rounded-lg border border-[#E6E6E0] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-          <h2 className="border-b border-[#EFF0EC] px-7 py-5 text-[18px] font-bold text-[#5B735F]">
+      <div className="mt-8 flex flex-col items-start gap-6 xl:h-[308px] xl:flex-row">
+        <section className="flex w-full flex-1 flex-col items-start overflow-hidden rounded-[16px] border border-[rgba(194,200,192,0.3)] bg-white shadow-[0_4px_20px_rgba(63,91,75,0.05)] xl:h-[297px]">
+          <h2 className="flex h-[71px] w-full items-center border-b border-[rgba(194,200,192,0.3)] px-8 py-5 text-[20px] font-medium leading-[30px] text-[#46624E]">
             Recent Billing Activity
           </h2>
-          <div>
+          <div className="w-full xl:h-56">
             {[
               [
                 "Eleanor Vance",
                 "ST-938210 - sanctuary-core",
                 "$29.00",
+                "Oct 24, 2023",
                 "Successful",
               ],
               [
                 "Julian Blackwood",
                 "ST-884122 - archive-pro",
                 "$89.00",
+                "Oct 23, 2023",
                 "Failed",
               ],
               [
                 "Sophia Meriam",
                 "ST-102934 - sanctuary-core",
                 "$29.00",
+                "Oct 22, 2023",
                 "Successful",
               ],
-            ].map(([name, detail, amount, status]) => (
+            ].map(([name, detail, amount, date, status], index) => (
               <div
                 key={name}
-                className="grid grid-cols-1 gap-3 border-b border-[#EFF0EC] px-5 py-4 last:border-b-0 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-5 sm:px-7"
+                className={`flex min-h-[74px] w-full flex-col gap-3 px-5 py-4 sm:h-[75px] sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-8 ${
+                  index === 0 ? "" : "border-t border-[rgba(194,200,192,0.2)]"
+                }`}
               >
-                <div className="flex items-center gap-4">
+                <div className="flex min-w-0 items-center gap-4">
                   <span
                     className={`flex h-10 w-10 items-center justify-center rounded-full ${
                       status === "Failed"
-                        ? "bg-[#FFE4E4] text-[#E15555]"
-                        : "bg-[#DCEFE3] text-[#46624E]"
+                        ? "bg-[#FFDAD6] text-[#BA1A1A]"
+                        : "bg-[#CAEAD5] text-[#46624E]"
                     }`}
                   >
                     <HugeiconsIcon
                       icon={status === "Failed" ? Alert01Icon : Invoice01Icon}
-                      size={20}
+                      size={status === "Failed" ? 20 : 22}
                       strokeWidth={1.8}
+                      className={
+                        status === "Failed" ? "h-5 w-5" : "h-4 w-[22px]"
+                      }
                     />
                   </span>
-                  <div>
-                    <p className="text-[13px] font-bold text-[#28334A]">
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-semibold leading-6 text-[#111C2D]">
                       {name}
                     </p>
-                    <p className="mt-1 text-[11px] font-medium text-[#7B827B]">
+                    <p className="truncate text-[12px] font-normal leading-[18px] text-[#727972]">
                       {detail}
                     </p>
                   </div>
                 </div>
-                <p className="text-[13px] font-bold text-[#28334A]">{amount}</p>
-                <span
-                  className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${
-                    status === "Failed"
-                      ? "bg-[#FFE8E8] text-[#D24747]"
-                      : "bg-[#DDF0E3] text-[#46624E]"
-                  }`}
-                >
-                  {status}
-                </span>
+                <div className="flex items-center justify-between gap-4 sm:gap-5">
+                  <div className="text-left sm:text-right">
+                    <p className="text-[15px] font-bold leading-6 text-[#111C2D]">
+                      {amount}
+                    </p>
+                    <p className="text-[12px] font-normal leading-[18px] text-[#727972]">
+                      {date}
+                    </p>
+                  </div>
+                  <span
+                    className={`flex h-[22px] items-center rounded-full px-3 py-[2.5px] text-[11px] font-bold leading-4 ${
+                      status === "Failed"
+                        ? "bg-[#FFDAD6] text-[#93000A]"
+                        : "bg-[#CAEAD5] text-[#314D3D]"
+                    }`}
+                  >
+                    {status}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`More actions for ${name}`}
+                    className="flex h-4 w-1 flex-col items-center justify-center gap-1"
+                  >
+                    <span className="h-1 w-1 rounded-full bg-[#727972]" />
+                    <span className="h-1 w-1 rounded-full bg-[#727972]" />
+                    <span className="h-1 w-1 rounded-full bg-[#727972]" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="rounded-lg border border-[#E6E6E0] bg-white p-7 shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
-          <p className="text-[13px] font-bold uppercase tracking-wide text-[#9A9E98]">
+        <section className="flex h-[308px] w-full flex-1 flex-col items-start gap-4 rounded-[16px] border border-[rgba(194,200,192,0.3)] bg-white p-8 shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
+          <p className="flex h-6 w-full items-center text-[16px] font-normal uppercase leading-6 tracking-[0.8px] text-[#727972]">
             Renewal Monitoring
           </p>
-          <div className="mt-6 space-y-5">
+          <div className="flex w-full flex-col items-start gap-4 pb-2">
             <BillingSummaryRow label="Next Auto-Pay Cycle" value="Oct 24, 2023" />
             <BillingSummaryRow label="Pending Settlements" value="$1,420.00" />
             <BillingSummaryRow
@@ -270,7 +311,7 @@ export function SubscriptionBillingContent() {
           </div>
           <button
             type="button"
-            className="mt-7 h-12 w-full rounded-lg border border-[#BFC6BC] bg-white text-[13px] font-bold text-[#334155] transition hover:bg-[#F2F4EE]"
+            className="flex h-[50px] w-full items-center justify-center rounded-[12px] border border-[#727972] bg-white px-0 py-3 text-[15px] font-medium leading-6 text-[#111C2D] transition hover:bg-[#F2F4EE]"
           >
             View Stripe Dashboard
           </button>

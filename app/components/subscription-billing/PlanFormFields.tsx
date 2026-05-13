@@ -5,6 +5,8 @@ type PlanFormSectionProps = {
   title: string;
   icon: IconSvgElement;
   badge?: string;
+  className?: string;
+  contentClassName?: string;
   children: ReactNode;
 };
 
@@ -12,24 +14,32 @@ export function PlanFormSection({
   title,
   icon,
   badge,
+  className = "",
+  contentClassName = "",
   children,
 }: PlanFormSectionProps) {
   return (
-    <section className="rounded-lg border border-[#E6E6E0] bg-white p-5 shadow-[0_12px_30px_rgba(31,47,40,0.06)] sm:p-7">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <section
+      className={`rounded-[16px] border border-[rgba(194,200,192,0.3)] bg-white p-6 shadow-[0_4px_20px_rgba(63,91,75,0.05)] sm:p-8 ${className}`}
+    >
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E7EEE9] text-[#46624E]">
-            <HugeiconsIcon icon={icon} size={18} strokeWidth={1.8} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[rgba(94,123,101,0.2)] text-[#46624E]">
+            <HugeiconsIcon icon={icon} size={20} strokeWidth={1.8} />
           </span>
-          <h2 className="text-[15px] font-bold text-[#334155]">{title}</h2>
+          <h2 className="text-[20px] font-medium leading-[30px] text-[#111C2D]">
+            {title}
+          </h2>
         </div>
         {badge ? (
-          <span className="rounded-full bg-[#DCEFE3] px-3 py-1 text-[10px] font-bold text-[#46624E]">
+          <span className="rounded-full bg-[#CAEAD5] px-3 py-1 text-[12px] font-medium leading-[18px] text-[#4E6B5A]">
             {badge}
           </span>
         ) : null}
       </div>
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">{children}</div>
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${contentClassName}`}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -40,6 +50,7 @@ type PlanTextFieldProps = {
   readOnly: boolean;
   onChange: (value: string) => void;
   hint?: string;
+  prefix?: string;
   suffix?: string;
   className?: string;
 };
@@ -50,31 +61,39 @@ export function PlanTextField({
   readOnly,
   onChange,
   hint,
+  prefix,
   suffix,
   className = "",
 }: PlanTextFieldProps) {
   return (
     <label className={className}>
-      <span className="text-[12px] font-semibold text-[#5E685F]">{label}</span>
+      <span className="text-[16px] font-normal leading-6 text-[#424843]">
+        {label}
+      </span>
       <span className="relative mt-2 block">
+        {prefix ? (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[16px] font-normal leading-6 text-[#424843]">
+            {prefix}
+          </span>
+        ) : null}
         <input
           readOnly={readOnly}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={`h-12 w-full rounded-lg border px-4 text-[13px] font-semibold text-[#334155] outline-none transition ${
+          className={`h-[50px] w-full rounded-[12px] border text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition ${
             readOnly
-              ? "border-[#DCE1DA] bg-[#F6F8F5]"
-              : "border-[#C9D0C7] bg-[#F1F4FF] focus:border-[#46624E] focus:bg-white"
-          } ${suffix ? "pr-14" : ""}`}
+              ? "border-[#C2C8C0] bg-[#F0F3FF]"
+              : "border-[#C2C8C0] bg-[#F0F3FF] focus:border-[#46624E] focus:bg-white"
+          } ${prefix ? "pl-8" : "pl-4"} ${suffix ? "pr-14" : "pr-4"}`}
         />
         {suffix ? (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-[#6F7670]">
+          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[16px] font-normal leading-6 text-[#424843]">
             {suffix}
           </span>
         ) : null}
       </span>
       {hint ? (
-        <span className="mt-1 block text-[10px] font-semibold text-[#8A928B]">
+        <span className="mt-1 block text-[11px] font-normal leading-4 text-[#424843]">
           {hint}
         </span>
       ) : null}
@@ -101,15 +120,17 @@ export function PlanSelectField({
 }: PlanSelectFieldProps) {
   return (
     <label className={className}>
-      <span className="text-[12px] font-semibold text-[#5E685F]">{label}</span>
+      <span className="text-[16px] font-normal leading-6 text-[#424843]">
+        {label}
+      </span>
       <select
         disabled={readOnly}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={`mt-2 h-12 w-full rounded-lg border px-4 text-[13px] font-semibold text-[#334155] outline-none transition disabled:opacity-100 ${
+        className={`mt-2 h-[50px] w-full rounded-[12px] border px-3 text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition disabled:opacity-100 ${
           readOnly
-            ? "border-[#DCE1DA] bg-[#F6F8F5]"
-            : "border-[#C9D0C7] bg-[#F1F4FF] focus:border-[#46624E] focus:bg-white"
+            ? "border-[#C2C8C0] bg-[#F0F3FF]"
+            : "border-[#C2C8C0] bg-[#F0F3FF] focus:border-[#46624E] focus:bg-white"
         }`}
       >
         {options.map((option) => (
@@ -130,9 +151,13 @@ export function PlanHealthMini({
   value: string;
 }) {
   return (
-    <div className="rounded-lg bg-[#F7F8FD] p-4">
-      <p className="text-[9px] font-bold uppercase text-[#8A928B]">{label}</p>
-      <p className="mt-2 text-[17px] font-bold text-[#46624E]">{value}</p>
+    <div className="rounded-[12px] bg-[#F9F9FF] p-3">
+      <p className="text-[10px] font-bold uppercase leading-[15px] text-[#424843]">
+        {label}
+      </p>
+      <p className="text-[20px] font-bold leading-[30px] text-[#46624E]">
+        {value}
+      </p>
     </div>
   );
 }
