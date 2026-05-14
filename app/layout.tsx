@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "John Karle Dashboard",
   description: "Dashboard built with Next.js, Tailwind CSS, and TypeScript.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -13,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

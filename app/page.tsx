@@ -42,7 +42,11 @@ import {
 } from "@hugeicons/core-free-icons";
 import { AiInsightsContent } from "./components/ai-insights/AiInsightsContent";
 import { BulkEmailContent } from "./components/bulk-email/BulkEmailContent";
-import { ConfigureContent } from "./components/configure/ConfigureContent";
+import {
+  ConfigureContent,
+  DEFAULT_PLATFORM_LOGO,
+  PLATFORM_LOGO_STORAGE_KEY,
+} from "./components/configure/ConfigureContent";
 import { CreateAdminContent } from "./components/create-admin/CreateAdminContent";
 import { ProfileContent } from "./components/profile/ProfileContent";
 import { ReportsContent } from "./components/reports/ReportsContent";
@@ -530,6 +534,7 @@ function Icon({
 
 export default function Home() {
   const [activeNav, setActiveNav] = useState<NavKey>("billing");
+  const [platformLogo, setPlatformLogo] = useState(DEFAULT_PLATFORM_LOGO);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [contentView, setContentView] = useState<
@@ -540,6 +545,24 @@ export default function Home() {
     () => navItems.find((item) => item.key === activeNav)?.label ?? "Dashboard",
     [activeNav],
   );
+
+  useEffect(() => {
+    const savedLogo = window.localStorage.getItem(PLATFORM_LOGO_STORAGE_KEY);
+
+    if (
+      savedLogo &&
+      (savedLogo.startsWith("/") || savedLogo.startsWith("data:image/"))
+    ) {
+      setPlatformLogo(savedLogo);
+    } else if (savedLogo) {
+      window.localStorage.removeItem(PLATFORM_LOGO_STORAGE_KEY);
+    }
+  }, []);
+
+  function handleLogoFallback() {
+    window.localStorage.removeItem(PLATFORM_LOGO_STORAGE_KEY);
+    setPlatformLogo(DEFAULT_PLATFORM_LOGO);
+  }
 
   return (
     <main className="min-h-screen bg-[#FAFAF7] text-[#263029]">
@@ -557,8 +580,10 @@ export default function Home() {
       ) : null}
       <Sidebar
         activeNav={activeNav}
+        platformLogo={platformLogo}
         isOpen={sidebarOpen}
         onLogout={() => setLogoutOpen(true)}
+        onLogoFallback={handleLogoFallback}
         onChange={(key) => {
           setActiveNav(key);
           setContentView("nav");
@@ -593,7 +618,10 @@ export default function Home() {
         ) : activeNav === "email" ? (
           <BulkEmailContent />
         ) : activeNav === "configure" ? (
-          <ConfigureContent />
+          <ConfigureContent
+            platformLogo={platformLogo}
+            onPlatformLogoChange={setPlatformLogo}
+          />
         ) : activeNav === "settings" ? (
           <SettingsContent />
         ) : (
@@ -613,15 +641,21 @@ export default function Home() {
 
 function Sidebar({
   activeNav,
+  platformLogo,
   isOpen,
   onLogout,
+  onLogoFallback,
   onChange,
 }: {
   activeNav: NavKey;
+  platformLogo: string;
   isOpen: boolean;
   onLogout: () => void;
+  onLogoFallback: () => void;
   onChange: (key: NavKey) => void;
 }) {
+  const hasUploadedLogo = platformLogo.startsWith("data:image/");
+
   return (
     <aside
       className={`fixed bottom-4 left-4 top-4 z-40 flex w-[min(calc(100vw-2rem),288px)] flex-col rounded-lg bg-white px-5 py-6 shadow-[0_18px_45px_rgba(31,47,40,0.14)] transition-transform duration-200 md:bottom-8 md:left-8 md:top-8 md:w-[288px] md:px-7 md:py-8 ${
@@ -629,7 +663,23 @@ function Sidebar({
       }`}
     >
       <div className="flex justify-center">
-        <Image src="/logo.png" alt="Lineage.AI" width={150} height={126} />
+        {hasUploadedLogo ? (
+          <img
+            src={platformLogo}
+            alt="Lineage.AI"
+            onError={onLogoFallback}
+            className="h-[126px] w-[150px] object-contain"
+          />
+        ) : (
+          <Image
+            src={DEFAULT_PLATFORM_LOGO}
+            alt="Lineage.AI"
+            width={150}
+            height={126}
+            priority
+            className="h-[126px] w-[150px] object-contain"
+          />
+        )}
       </div>
 
       <nav className="mt-9 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">

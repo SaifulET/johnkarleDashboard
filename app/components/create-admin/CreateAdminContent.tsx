@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ImageUploadIcon,
@@ -12,6 +17,61 @@ import {
 export function CreateAdminContent() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileImageMessage, setProfileImageMessage] = useState(
+    "PNG, JPG, or SVG up to 2MB",
+  );
+  const [profileImageError, setProfileImageError] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  function uploadProfileImage(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setProfileImageMessage("Please choose a valid image file.");
+      setProfileImageError(true);
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileImageMessage("Image must be 2MB or smaller.");
+      setProfileImageError(true);
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setProfileImageMessage("Could not read that image.");
+        setProfileImageError(true);
+        return;
+      }
+
+      setProfileImage(reader.result);
+      setProfileImageMessage(file.name);
+      setProfileImageError(false);
+    };
+
+    reader.onerror = () => {
+      setProfileImageMessage("Could not read that image.");
+      setProfileImageError(true);
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function handleProfileImageChange(event: ChangeEvent<HTMLInputElement>) {
+    uploadProfileImage(event.target.files?.[0]);
+    event.target.value = "";
+  }
+
+  function handleProfileImageDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    uploadProfileImage(event.dataTransfer.files?.[0]);
+  }
 
   return (
     <section className="w-full">
@@ -58,17 +118,42 @@ export function CreateAdminContent() {
               </label>
               <button
                 type="button"
-                className="mt-3 flex min-h-[118px] w-full flex-col items-center justify-center rounded-lg border border-[#E4E8E3] bg-[#F7F8F7] text-[#A5A9A5] transition hover:border-[#AAB8A8] hover:bg-[#F2F4EE]"
+                onClick={() => imageInputRef.current?.click()}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleProfileImageDrop}
+                className={`mt-3 flex min-h-[118px] w-full flex-col items-center justify-center rounded-lg border bg-[#F7F8F7] transition hover:border-[#AAB8A8] hover:bg-[#F2F4EE] ${
+                  profileImageError
+                    ? "border-[#D56A6A] text-[#B44444]"
+                    : "border-[#E4E8E3] text-[#66785F]"
+                }`}
               >
-                <HugeiconsIcon
-                  icon={ImageUploadIcon}
-                  size={24}
-                  strokeWidth={1.7}
-                />
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt="Selected admin profile"
+                    className="h-20 w-20 rounded-full object-cover"
+                  />
+                ) : (
+                  <HugeiconsIcon
+                    icon={ImageUploadIcon}
+                    size={24}
+                    strokeWidth={1.7}
+                  />
+                )}
                 <span className="mt-2 text-[14px] font-semibold">
-                  Upload Image
+                  {profileImage ? "Change Image" : "Upload Image"}
+                </span>
+                <span className="mt-1 text-[12px] font-medium">
+                  {profileImageMessage}
                 </span>
               </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handleProfileImageChange}
+              />
             </div>
           </div>
 

@@ -1,7 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import {
   AiSettingIcon,
@@ -11,6 +18,7 @@ import {
   BookOpenTextIcon,
   BrainCogIcon,
   Briefcase01Icon,
+  Cancel01Icon,
   CheckmarkCircle02Icon,
   CheckmarkSquare01Icon,
   CloudUploadIcon,
@@ -34,7 +42,50 @@ import {
 
 type Tab = "General" | "AI Settings" | "Email Templates";
 
+export const DEFAULT_PLATFORM_LOGO = "/logo.png";
+export const PLATFORM_LOGO_STORAGE_KEY = "lineage-platform-logo";
+const CONFIGURATION_STORAGE_KEY = "lineage-configuration-settings";
+
 const tabs: Tab[] = ["General", "AI Settings", "Email Templates"];
+const maxLogoFileSize = 2 * 1024 * 1024;
+const allowedLogoTypes = ["image/png", "image/svg+xml"];
+type EmotionalTone = "Compassionate" | "Neutral" | "Professional";
+type SafetyFilterKey = "piiRedaction" | "griefSensitivity" | "sensitiveContent";
+type AiSettings = {
+  strictness: number;
+  emotionalTone: EmotionalTone;
+  deepArchiveEnabled: boolean;
+  contextNodes: string;
+  safetyFilters: Record<SafetyFilterKey, boolean>;
+};
+type EmailTemplate = {
+  id: string;
+  icon: IconSvgElement;
+  title: string;
+  description: string;
+  subject: string;
+  content: string;
+};
+type StoredEmailTemplate = Omit<EmailTemplate, "icon">;
+type EmailDraft = Pick<EmailTemplate, "subject" | "content">;
+
+const defaultAiSettings: AiSettings = {
+  strictness: 0.8,
+  emotionalTone: "Compassionate",
+  deepArchiveEnabled: true,
+  contextNodes: "Standard (5 Nodes)",
+  safetyFilters: {
+    piiRedaction: true,
+    griefSensitivity: true,
+    sensitiveContent: true,
+  },
+};
+
+const safetyFilterRows: Array<{ key: SafetyFilterKey; label: string }> = [
+  { key: "piiRedaction", label: "Automated PII Redaction" },
+  { key: "griefSensitivity", label: "Grief Sensitivity Mode" },
+  { key: "sensitiveContent", label: "Block Sensitive Content" },
+];
 
 const integrations = [
   { initial: "S", name: "Stripe", status: "Connected", active: true },
@@ -42,55 +93,58 @@ const integrations = [
   { initial: "A", name: "AWS S3", status: "Auth Required", active: false },
 ];
 
-const toneProfiles = [
+const toneProfiles: Array<{
+  icon: IconSvgElement;
+  title: EmotionalTone;
+  description: string;
+}> = [
   {
     icon: HeartCheckIcon,
     title: "Compassionate",
     description: "Warm and empathetic tone, sensitive to legacy and memory.",
-    active: true,
   },
   {
     icon: BalanceScaleIcon,
     title: "Neutral",
     description: "Balanced and objective reporting of historical facts.",
-    active: false,
   },
   {
     icon: Briefcase01Icon,
     title: "Professional",
     description: "Formal, scholarly tone suitable for academic research.",
-    active: false,
   },
 ];
 
-const emailTemplates = [
+const defaultEmailTemplateMetadata: Array<
+  Pick<EmailTemplate, "id" | "icon" | "title" | "description">
+> = [
   {
+    id: "memory-anniversary",
     icon: MailSetting01Icon,
     title: "Memory Anniversary",
     description: "Sent every 1, 5, 10 years",
-    active: true,
   },
   {
+    id: "welcome-series",
     icon: HeartCheckIcon,
     title: "Welcome Series",
     description: "Onboarding for new descendants",
-    active: false,
   },
   {
+    id: "security-alert",
     icon: Shield01Icon,
     title: "Security Alert",
     description: "Vault access notifications",
-    active: false,
   },
   {
+    id: "family-invitation",
     icon: LinkSquare02Icon,
     title: "Family Invitation",
     description: "Join a lineage circle",
-    active: false,
   },
 ];
 
-const tokens = [
+const defaultTokens = [
   "[[User_Name]]",
   "[[Memory_Title]]",
   "[[Anniversary_Year]]",
@@ -110,8 +164,199 @@ We invite you to step back into the vault and relive this precious moment with y
 Warmly,
 The Lineage Team`;
 
-export function ConfigureContent() {
+const initialEmailTemplates: EmailTemplate[] = [
+  {
+    ...defaultEmailTemplateMetadata[0],
+    subject: defaultEmailSubject,
+    content: defaultEmailContent,
+  },
+  {
+    ...defaultEmailTemplateMetadata[1],
+    subject: "Welcome to your Lineage.AI sanctuary",
+    content: `Dear [[User_Name]],
+
+Your family archive is ready. Start by adding a memory, inviting trusted relatives, and choosing the stories you want preserved first.
+
+Warmly,
+The Lineage Team`,
+  },
+  {
+    ...defaultEmailTemplateMetadata[2],
+    subject: "Security update for your Lineage.AI account",
+    content: `Dear [[User_Name]],
+
+We noticed a security event connected to your vault. Please review your recent activity and confirm that the access was expected.
+
+Warmly,
+The Lineage Team`,
+  },
+  {
+    ...defaultEmailTemplateMetadata[3],
+    subject: "[[User_Name]] invited you to a family vault",
+    content: `Dear [[User_Name]],
+
+You have been invited to join a Lineage.AI family vault. Open the invitation to view shared memories and contribute your own stories.
+
+Warmly,
+The Lineage Team`,
+  },
+];
+
+function getEmailTemplateIcon(templateId: string) {
+  return (
+    defaultEmailTemplateMetadata.find((template) => template.id === templateId)
+      ?.icon ?? FileEditIcon
+  );
+}
+
+export function ConfigureContent({
+  platformLogo,
+  onPlatformLogoChange,
+}: {
+  platformLogo: string;
+  onPlatformLogoChange: (logoSrc: string) => void;
+}) {
   const [activeTab, setActiveTab] = useState<Tab>("General");
+  const [aiSettings, setAiSettings] = useState<AiSettings>(defaultAiSettings);
+  const [emailTemplatesState, setEmailTemplatesState] =
+    useState<EmailTemplate[]>(initialEmailTemplates);
+  const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState(
+    initialEmailTemplates[0].id,
+  );
+  const [emailTokens, setEmailTokens] = useState(defaultTokens);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+
+  useEffect(() => {
+    const savedConfiguration = window.localStorage.getItem(
+      CONFIGURATION_STORAGE_KEY,
+    );
+
+    if (!savedConfiguration) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedConfiguration) as {
+        aiSettings?: Partial<AiSettings>;
+        emailTemplates?: StoredEmailTemplate[];
+        selectedEmailTemplateId?: string;
+        emailTokens?: string[];
+      };
+
+      if (parsed.aiSettings) {
+        setAiSettings({
+          ...defaultAiSettings,
+          ...parsed.aiSettings,
+          safetyFilters: {
+            ...defaultAiSettings.safetyFilters,
+            ...parsed.aiSettings.safetyFilters,
+          },
+        });
+      }
+
+      if (parsed.emailTemplates?.length) {
+        setEmailTemplatesState(
+          parsed.emailTemplates.map((template) => ({
+            ...template,
+            icon: getEmailTemplateIcon(template.id),
+          })),
+        );
+        setSelectedEmailTemplateId(
+          parsed.selectedEmailTemplateId ?? parsed.emailTemplates[0].id,
+        );
+      }
+
+      if (parsed.emailTokens?.length) {
+        setEmailTokens(parsed.emailTokens);
+      }
+    } catch {
+      window.localStorage.removeItem(CONFIGURATION_STORAGE_KEY);
+    }
+  }, []);
+
+  function updateAiSettings(update: Partial<AiSettings>) {
+    setAiSettings((current) => ({ ...current, ...update }));
+    setSaveStatus("idle");
+  }
+
+  function handlePlatformLogoChange(logoSrc: string) {
+    onPlatformLogoChange(logoSrc);
+    setSaveStatus("idle");
+  }
+
+  function updateSafetyFilter(key: SafetyFilterKey, enabled: boolean) {
+    setAiSettings((current) => ({
+      ...current,
+      safetyFilters: {
+        ...current.safetyFilters,
+        [key]: enabled,
+      },
+    }));
+    setSaveStatus("idle");
+  }
+
+  function updateEmailTemplate(
+    templateId: string,
+    update: Partial<StoredEmailTemplate>,
+  ) {
+    setEmailTemplatesState((templates) =>
+      templates.map((template) =>
+        template.id === templateId ? { ...template, ...update } : template,
+      ),
+    );
+    setSaveStatus("idle");
+  }
+
+  function createEmailTemplate() {
+    const templateNumber = emailTemplatesState.length + 1;
+    const templateId = `custom-template-${Date.now()}`;
+
+    setEmailTemplatesState((templates) => [
+      ...templates,
+      {
+        id: templateId,
+        icon: FileEditIcon,
+        title: `New Template ${templateNumber}`,
+        description: "Custom email template",
+        subject: "New email subject",
+        content: `Dear [[User_Name]],
+
+Write your new message here.
+
+Warmly,
+The Lineage Team`,
+      },
+    ]);
+    setSelectedEmailTemplateId(templateId);
+    setSaveStatus("idle");
+  }
+
+  function createEmailToken(token: string) {
+    if (!token || emailTokens.includes(token)) {
+      return;
+    }
+
+    setEmailTokens((currentTokens) => [...currentTokens, token]);
+    setSaveStatus("idle");
+  }
+
+  function handleSaveChanges() {
+    window.localStorage.setItem(PLATFORM_LOGO_STORAGE_KEY, platformLogo);
+    window.localStorage.setItem(
+      CONFIGURATION_STORAGE_KEY,
+      JSON.stringify({
+        platformLogo,
+        aiSettings,
+        emailTemplates: emailTemplatesState.map(
+          ({ icon: _icon, ...template }) => template,
+        ),
+        selectedEmailTemplateId,
+        emailTokens,
+        savedAt: new Date().toISOString(),
+      }),
+    );
+    setSaveStatus("saved");
+  }
 
   return (
     <section className="flex w-full flex-col items-start gap-8">
@@ -127,10 +372,11 @@ export function ConfigureContent() {
         </div>
         <button
           type="button"
+          onClick={handleSaveChanges}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[#46624E] px-8 text-[16px] font-bold leading-6 text-white shadow-[0_10px_15px_-3px_rgba(70,98,78,0.2),0_4px_6px_-4px_rgba(70,98,78,0.2)] transition hover:bg-[#3C5544] sm:w-auto"
         >
           <HugeiconsIcon icon={SaveIcon} size={18} strokeWidth={1.8} />
-          Save Changes
+          {saveStatus === "saved" ? "Changes Saved" : "Save Changes"}
         </button>
       </header>
 
@@ -156,17 +402,94 @@ export function ConfigureContent() {
       </nav>
 
       {activeTab === "General" ? (
-        <GeneralTab />
+        <GeneralTab
+          platformLogo={platformLogo}
+          onPlatformLogoChange={handlePlatformLogoChange}
+        />
       ) : activeTab === "AI Settings" ? (
-        <AiSettingsTab />
+        <AiSettingsTab
+          settings={aiSettings}
+          onSettingsChange={updateAiSettings}
+          onSafetyFilterChange={updateSafetyFilter}
+        />
       ) : (
-        <EmailTemplatesTab />
+        <EmailTemplatesTab
+          templates={emailTemplatesState}
+          selectedTemplateId={selectedEmailTemplateId}
+          tokens={emailTokens}
+          onTemplateSelect={setSelectedEmailTemplateId}
+          onTemplateCreate={createEmailTemplate}
+          onTemplateChange={updateEmailTemplate}
+          onTokenCreate={createEmailToken}
+        />
       )}
     </section>
   );
 }
 
-function GeneralTab() {
+function GeneralTab({
+  platformLogo,
+  onPlatformLogoChange,
+}: {
+  platformLogo: string;
+  onPlatformLogoChange: (logoSrc: string) => void;
+}) {
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoMessage, setLogoMessage] = useState("Maximum file size: 2MB.");
+  const [logoError, setLogoError] = useState(false);
+
+  function handleLogoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const hasAllowedType =
+      allowedLogoTypes.includes(file.type) ||
+      file.name.toLowerCase().endsWith(".png") ||
+      file.name.toLowerCase().endsWith(".svg");
+
+    if (!hasAllowedType) {
+      setLogoMessage("Please choose a PNG or SVG logo.");
+      setLogoError(true);
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > maxLogoFileSize) {
+      setLogoMessage("Logo must be 2MB or smaller.");
+      setLogoError(true);
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setLogoMessage("Could not read that logo file.");
+        setLogoError(true);
+        event.target.value = "";
+        return;
+      }
+
+      onPlatformLogoChange(reader.result);
+      window.localStorage.setItem(PLATFORM_LOGO_STORAGE_KEY, reader.result);
+      setLogoMessage(file.name);
+      setLogoError(false);
+      event.target.value = "";
+    };
+
+    reader.onerror = () => {
+      setLogoMessage("Could not read that logo file.");
+      setLogoError(true);
+      event.target.value = "";
+    };
+
+    reader.readAsDataURL(file);
+  }
+
   return (
     <div className="grid w-full gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(300px,328px)]">
       <div className="space-y-8">
@@ -188,17 +511,23 @@ function GeneralTab() {
           >
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[16px] border-2 border-dashed border-[rgba(70,98,78,0.2)] bg-[#CAEAD5]">
-                <Image
-                  src="/logo.png"
+                <img
+                  src={platformLogo}
                   alt="Lineage.AI logo preview"
-                  width={40}
-                  height={40}
-                  className="opacity-50"
+                  className="h-10 w-10 object-contain opacity-60"
                 />
               </div>
               <div className="min-w-0 flex-1">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/svg+xml,.png,.svg"
+                  className="sr-only"
+                  onChange={handleLogoChange}
+                />
                 <button
                   type="button"
+                  onClick={() => logoInputRef.current?.click()}
                   className="flex h-[42px] items-center gap-2 rounded-[12px] border border-[#C2C8C0] bg-white px-4 text-[14px] font-semibold leading-5 text-[#111C2D] transition hover:bg-[#F5F2EB]"
                 >
                   <HugeiconsIcon
@@ -209,8 +538,12 @@ function GeneralTab() {
                   />
                   Choose New Logo
                 </button>
-                <p className="mt-2 text-[10px] font-normal leading-[15px] text-[#424843]">
-                  Maximum file size: 2MB.
+                <p
+                  className={`mt-2 text-[10px] font-normal leading-[15px] ${
+                    logoError ? "text-[#C84B4B]" : "text-[#424843]"
+                  }`}
+                >
+                  {logoMessage}
                 </p>
               </div>
             </div>
@@ -272,16 +605,22 @@ function GeneralTab() {
   );
 }
 
-function AiSettingsTab() {
-  const [strictness, setStrictness] = useState(0.8);
-  const [deepArchiveEnabled, setDeepArchiveEnabled] = useState(true);
-  const strictnessPercent = Math.round(strictness * 100);
+function AiSettingsTab({
+  settings,
+  onSettingsChange,
+  onSafetyFilterChange,
+}: {
+  settings: AiSettings;
+  onSettingsChange: (update: Partial<AiSettings>) => void;
+  onSafetyFilterChange: (key: SafetyFilterKey, enabled: boolean) => void;
+}) {
+  const strictnessPercent = Math.round(settings.strictness * 100);
   const strictnessLabel =
-    strictness >= 0.85
+    settings.strictness >= 0.85
       ? "Strict"
-      : strictness >= 0.65
+      : settings.strictness >= 0.65
         ? "High"
-        : strictness >= 0.35
+        : settings.strictness >= 0.35
           ? "Balanced"
           : "Creative";
 
@@ -299,7 +638,7 @@ function AiSettingsTab() {
             <div className="grid grid-cols-3 gap-4 text-[16px] uppercase leading-6 text-[#424843]">
               <span>Creative Narrative</span>
               <span className="font-bold text-[#46624E]">
-                {strictnessLabel} ({strictness.toFixed(2)} Strictness)
+                {strictnessLabel} ({settings.strictness.toFixed(2)} Strictness)
               </span>
               <span>Strict Fact-Only</span>
             </div>
@@ -311,9 +650,11 @@ function AiSettingsTab() {
                 min="0"
                 max="1"
                 step="0.05"
-                value={strictness}
+                value={settings.strictness}
                 onChange={(event) =>
-                  setStrictness(Number(event.currentTarget.value))
+                  onSettingsChange({
+                    strictness: Number(event.currentTarget.value),
+                  })
                 }
                 className="strictness-range absolute left-0 top-1/2 h-2 w-full -translate-y-1/2 cursor-pointer appearance-none rounded-full outline-none"
                 style={{
@@ -341,7 +682,12 @@ function AiSettingsTab() {
         <AiSettingsCard title="Emotional Tone Profile">
           <div className="grid gap-4 md:grid-cols-3">
             {toneProfiles.map((profile) => (
-              <ToneCard key={profile.title} {...profile} />
+              <ToneCard
+                key={profile.title}
+                {...profile}
+                active={profile.title === settings.emotionalTone}
+                onSelect={() => onSettingsChange({ emotionalTone: profile.title })}
+              />
             ))}
           </div>
         </AiSettingsCard>
@@ -355,12 +701,17 @@ function AiSettingsTab() {
             <ToggleRow
               title="Deep Archive Search"
               description="Access older historical nodes"
-              enabled={deepArchiveEnabled}
-              onToggle={() => setDeepArchiveEnabled((enabled) => !enabled)}
+              enabled={settings.deepArchiveEnabled}
+              onToggle={() =>
+                onSettingsChange({
+                  deepArchiveEnabled: !settings.deepArchiveEnabled,
+                })
+              }
             />
             <CompactSelect
               label="Context Nodes per Query"
-              value="Standard (5 Nodes)"
+              value={settings.contextNodes}
+              onChange={(contextNodes) => onSettingsChange({ contextNodes })}
             />
           </AiSettingsCard>
 
@@ -370,9 +721,14 @@ function AiSettingsTab() {
             iconClassName="text-[#BA1A1A]"
             compact
           >
-            <CheckRow label="Automated PII Redaction" />
-            <CheckRow label="Grief Sensitivity Mode" />
-            <CheckRow label="Block Sensitive Content" />
+            {safetyFilterRows.map((row) => (
+              <CheckRow
+                key={row.key}
+                label={row.label}
+                checked={settings.safetyFilters[row.key]}
+                onChange={(checked) => onSafetyFilterChange(row.key, checked)}
+              />
+            ))}
           </AiSettingsCard>
         </div>
       </div>
@@ -386,9 +742,162 @@ function AiSettingsTab() {
   );
 }
 
-function EmailTemplatesTab() {
-  const [subject, setSubject] = useState(defaultEmailSubject);
-  const [emailContent, setEmailContent] = useState(defaultEmailContent);
+function normalizeTokenName(value: string) {
+  const trimmedValue = value.trim();
+
+  if (/^\[\[[A-Za-z0-9_]+\]\]$/.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  const tokenName = trimmedValue
+    .replace(/^\[\[|\]\]$/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return tokenName ? `[[${tokenName}]]` : "";
+}
+
+function EmailTemplatesTab({
+  templates,
+  selectedTemplateId,
+  tokens,
+  onTemplateSelect,
+  onTemplateCreate,
+  onTemplateChange,
+  onTokenCreate,
+}: {
+  templates: EmailTemplate[];
+  selectedTemplateId: string;
+  tokens: string[];
+  onTemplateSelect: (templateId: string) => void;
+  onTemplateCreate: () => void;
+  onTemplateChange: (
+    templateId: string,
+    update: Partial<StoredEmailTemplate>,
+  ) => void;
+  onTokenCreate: (token: string) => void;
+}) {
+  const selectedTemplate =
+    templates.find((template) => template.id === selectedTemplateId) ??
+    templates[0];
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const [history, setHistory] = useState<{
+    past: EmailDraft[];
+    future: EmailDraft[];
+  }>({ past: [], future: [] });
+  const [newTokenName, setNewTokenName] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setHistory({ past: [], future: [] });
+    setPreviewOpen(false);
+
+    if (selectedTemplate.id.startsWith("custom-template-")) {
+      window.requestAnimationFrame(() => {
+        titleInputRef.current?.focus();
+        titleInputRef.current?.select();
+      });
+    }
+  }, [selectedTemplate.id]);
+
+  function captureCurrentDraft() {
+    setHistory((currentHistory) => ({
+      past: [
+        ...currentHistory.past,
+        {
+          subject: selectedTemplate.subject,
+          content: selectedTemplate.content,
+        },
+      ],
+      future: [],
+    }));
+  }
+
+  function updateSelectedTemplate(update: Partial<StoredEmailTemplate>) {
+    captureCurrentDraft();
+    onTemplateChange(selectedTemplate.id, update);
+  }
+
+  function insertToken(token: string, textarea = contentRef.current) {
+    const insertionTarget = textarea;
+    const selectionStart =
+      insertionTarget?.selectionStart ?? selectedTemplate.content.length;
+    const selectionEnd =
+      insertionTarget?.selectionEnd ?? selectedTemplate.content.length;
+    const nextContent = `${selectedTemplate.content.slice(
+      0,
+      selectionStart,
+    )}${token}${selectedTemplate.content.slice(selectionEnd)}`;
+    const nextCursorPosition = selectionStart + token.length;
+
+    updateSelectedTemplate({ content: nextContent });
+
+    window.requestAnimationFrame(() => {
+      insertionTarget?.focus();
+      insertionTarget?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function handleTokenDrop(event: DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    const token = event.dataTransfer.getData("text/plain");
+
+    if (token) {
+      insertToken(token, event.currentTarget);
+    }
+  }
+
+  function handleCreateToken() {
+    const token = normalizeTokenName(newTokenName);
+
+    if (!token) {
+      return;
+    }
+
+    onTokenCreate(token);
+    setNewTokenName("");
+  }
+
+  function handleUndo() {
+    const previousDraft = history.past.at(-1);
+
+    if (!previousDraft) {
+      return;
+    }
+
+    setHistory((currentHistory) => ({
+      past: currentHistory.past.slice(0, -1),
+      future: [
+        {
+          subject: selectedTemplate.subject,
+          content: selectedTemplate.content,
+        },
+        ...currentHistory.future,
+      ],
+    }));
+    onTemplateChange(selectedTemplate.id, previousDraft);
+  }
+
+  function handleRedo() {
+    const nextDraft = history.future[0];
+
+    if (!nextDraft) {
+      return;
+    }
+
+    setHistory((currentHistory) => ({
+      past: [
+        ...currentHistory.past,
+        {
+          subject: selectedTemplate.subject,
+          content: selectedTemplate.content,
+        },
+      ],
+      future: currentHistory.future.slice(1),
+    }));
+    onTemplateChange(selectedTemplate.id, nextDraft);
+  }
 
   return (
     <div className="grid w-full gap-6 xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
@@ -402,6 +911,7 @@ function EmailTemplatesTab() {
             <button
               type="button"
               aria-label="Add template"
+              onClick={onTemplateCreate}
               className="flex h-9 w-9 items-center justify-center rounded-lg text-[#46624E] transition hover:bg-[#F5F2EB]"
             >
               <HugeiconsIcon icon={PlusSignIcon} size={18} strokeWidth={1.8} />
@@ -409,8 +919,13 @@ function EmailTemplatesTab() {
           </div>
 
           <div className="space-y-3">
-            {emailTemplates.map((template) => (
-              <TemplateCard key={template.title} {...template} />
+            {templates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                {...template}
+                active={template.id === selectedTemplate.id}
+                onSelect={() => onTemplateSelect(template.id)}
+              />
             ))}
           </div>
         </section>
@@ -425,18 +940,40 @@ function EmailTemplatesTab() {
               <button
                 key={token}
                 type="button"
-                onClick={() =>
-                  setEmailContent((content) => `${content}\n${token}`)
-                }
+                draggable
+                onClick={() => insertToken(token)}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "copy";
+                  event.dataTransfer.setData("text/plain", token);
+                }}
                 className="rounded-full border border-[#C2C8C0] bg-[#F0F3FF] px-3 py-1 font-mono text-[13px] font-normal leading-5 text-[#46624E] transition hover:bg-[#DDE6F3]"
               >
                 {token}
               </button>
             ))}
           </div>
-          <p className="mt-4 text-[11px] italic leading-4 text-[#424843]">
-            Click a token to copy or drag it into the editor.
-          </p>
+          <div className="mt-4 flex gap-2">
+            <input
+              value={newTokenName}
+              onChange={(event) => setNewTokenName(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleCreateToken();
+                }
+              }}
+              placeholder="[[New_Token]]"
+              className="h-9 min-w-0 flex-1 rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-3 font-mono text-[12px] text-[#111C2D] outline-none transition focus:border-[#46624E]"
+            />
+            <button
+              type="button"
+              aria-label="Create token"
+              onClick={handleCreateToken}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#46624E] text-white transition hover:bg-[#3C5544]"
+            >
+              <HugeiconsIcon icon={PlusSignIcon} size={16} strokeWidth={1.8} />
+            </button>
+          </div>
         </section>
       </div>
 
@@ -445,22 +982,55 @@ function EmailTemplatesTab() {
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="flex items-center gap-2 text-[16px] font-semibold leading-6 text-[#111C2D]">
               <HugeiconsIcon icon={FileEditIcon} size={18} strokeWidth={1.8} />
-              Editing: Memory Anniversary
+              Editing: {selectedTemplate.title || "Untitled Template"}
             </h2>
             <div className="flex items-center gap-2">
-              <IconButton icon={UndoIcon} label="Undo" />
-              <IconButton icon={RedoIcon} label="Redo" />
-              <IconButton icon={EyeIcon} label="Preview" />
+              <IconButton
+                icon={UndoIcon}
+                label="Undo"
+                disabled={history.past.length === 0}
+                onClick={handleUndo}
+              />
+              <IconButton
+                icon={RedoIcon}
+                label="Redo"
+                disabled={history.future.length === 0}
+                onClick={handleRedo}
+              />
+              <IconButton
+                icon={EyeIcon}
+                label="Preview"
+                onClick={() => setPreviewOpen(true)}
+              />
             </div>
           </div>
 
           <label className="block">
             <span className="text-[13px] font-semibold leading-5 text-[#424843]">
+              Template Name
+            </span>
+            <input
+              ref={titleInputRef}
+              value={selectedTemplate.title}
+              placeholder="Untitled Template"
+              onChange={(event) =>
+                onTemplateChange(selectedTemplate.id, {
+                  title: event.currentTarget.value,
+                })
+              }
+              className="mt-2 h-11 w-full rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition focus:border-[#46624E]"
+            />
+          </label>
+
+          <label className="mt-5 block">
+            <span className="text-[13px] font-semibold leading-5 text-[#424843]">
               Subject Line
             </span>
             <textarea
-              value={subject}
-              onChange={(event) => setSubject(event.currentTarget.value)}
+              value={selectedTemplate.subject}
+              onChange={(event) =>
+                updateSelectedTemplate({ subject: event.currentTarget.value })
+              }
               className="mt-2 h-16 w-full resize-none rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 py-3 text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition focus:border-[#46624E]"
             />
           </label>
@@ -470,8 +1040,13 @@ function EmailTemplatesTab() {
               Email Content
             </span>
             <textarea
-              value={emailContent}
-              onChange={(event) => setEmailContent(event.currentTarget.value)}
+              ref={contentRef}
+              value={selectedTemplate.content}
+              onChange={(event) =>
+                updateSelectedTemplate({ content: event.currentTarget.value })
+              }
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleTokenDrop}
               className="mt-2 min-h-[360px] w-full resize-none rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 py-4 font-serif text-[18px] font-normal leading-[29px] text-[#111C2D] outline-none transition focus:border-[#46624E]"
             />
           </label>
@@ -484,13 +1059,41 @@ function EmailTemplatesTab() {
         </div>
 
         <div className="flex flex-col items-center bg-[#EEF3FF] p-5">
-          <EmailPreview subject={subject} content={emailContent} />
+          <EmailPreview
+            subject={selectedTemplate.subject}
+            content={selectedTemplate.content}
+          />
           <div className="mt-4 flex items-center gap-3 text-[#8B96A3]">
             <HugeiconsIcon icon={SmartPhone01Icon} size={18} strokeWidth={1.8} />
             <HugeiconsIcon icon={LaptopIcon} size={18} strokeWidth={1.8} />
           </div>
         </div>
       </section>
+      {previewOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111C2D]/45 p-4">
+          <div className="max-h-[90vh] overflow-y-auto rounded-[20px] bg-[#EEF3FF] p-5 shadow-[0_24px_70px_rgba(17,28,45,0.28)]">
+            <div className="mb-4 flex items-center justify-end">
+              <button
+                type="button"
+                aria-label="Close preview"
+                onClick={() => setPreviewOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-[#46624E] transition hover:bg-[#F5F2EB]"
+              >
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  size={18}
+                  strokeWidth={1.8}
+                />
+              </button>
+            </div>
+            <EmailPreview
+              subject={selectedTemplate.subject}
+              content={selectedTemplate.content}
+              wide
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -634,17 +1237,26 @@ function LabeledSelect({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CompactSelect({ label, value }: { label: string; value: string }) {
+function CompactSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="block">
       <span className="text-[16px] font-normal leading-6 text-[#424843]">
         {label}
       </span>
       <select
-        defaultValue={value}
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
         className="mt-2 h-[42px] w-full rounded-[12px] border border-[#C2C8C0] bg-[#F0F3FF] px-3 text-[15px] font-normal leading-6 text-[#111C2D] outline-none"
       >
-        <option>{value}</option>
+        <option>Standard (5 Nodes)</option>
         <option>Extended (8 Nodes)</option>
         <option>Deep (12 Nodes)</option>
       </select>
@@ -694,15 +1306,19 @@ function ToneCard({
   title,
   description,
   active,
+  onSelect,
 }: {
   icon: IconSvgElement;
-  title: string;
+  title: EmotionalTone;
   description: string;
   active: boolean;
+  onSelect: () => void;
 }) {
   return (
     <button
       type="button"
+      aria-pressed={active}
+      onClick={onSelect}
       className={`flex min-h-[298px] flex-col rounded-[16px] border p-[23px_24px_24px] text-left transition ${
         active
           ? "border-2 border-[#46624E] bg-[rgba(202,234,213,0.3)] text-[#46624E]"
@@ -764,11 +1380,38 @@ function ToggleRow({
   );
 }
 
-function CheckRow({ label }: { label: string }) {
+function CheckRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <label className="flex min-h-12 cursor-pointer items-center gap-[11px] rounded-[12px] px-[11px] py-3">
-      <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded bg-[#46624E] text-white">
-        <HugeiconsIcon icon={CheckmarkSquare01Icon} size={14} strokeWidth={1.8} />
+    <label className="flex min-h-12 cursor-pointer items-center gap-[11px] rounded-[12px] px-[11px] py-3 transition hover:bg-[#F5F7F4]">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+        className="sr-only"
+      />
+      <span
+        aria-hidden="true"
+        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border transition ${
+          checked
+            ? "border-[#46624E] bg-[#46624E] text-white"
+            : "border-[#AEB7AA] bg-white text-transparent"
+        }`}
+      >
+        {checked ? (
+          <HugeiconsIcon
+            icon={CheckmarkSquare01Icon}
+            size={14}
+            strokeWidth={1.8}
+          />
+        ) : null}
       </span>
       <span className="text-[16px] font-normal leading-6 text-[#111C2D]">
         {label}
@@ -782,15 +1425,18 @@ function TemplateCard({
   title,
   description,
   active,
+  onSelect,
 }: {
   icon: IconSvgElement;
   title: string;
   description: string;
   active: boolean;
+  onSelect: () => void;
 }) {
   return (
     <button
       type="button"
+      onClick={onSelect}
       className={`flex w-full items-center gap-4 rounded-[12px] border p-4 text-left transition ${
         active
           ? "border-[#46624E] bg-[#CAEAD5]"
@@ -806,7 +1452,7 @@ function TemplateCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[14px] font-bold leading-5 text-[#46624E]">
-          {title}
+          {title || "Untitled Template"}
         </span>
         <span className="block text-[11px] leading-4 text-[#424843]">
           {description}
@@ -824,13 +1470,25 @@ function TemplateCard({
   );
 }
 
-function IconButton({ icon, label }: { icon: IconSvgElement; label: string }) {
+function IconButton({
+  icon,
+  label,
+  disabled = false,
+  onClick,
+}: {
+  icon: IconSvgElement;
+  label: string;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#46624E] transition hover:bg-[#F5F2EB]"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-[#46624E] transition hover:bg-[#F5F2EB] disabled:cursor-not-allowed disabled:text-[#AAB1A8] disabled:hover:bg-transparent"
     >
       <HugeiconsIcon icon={icon} size={16} strokeWidth={1.8} />
     </button>
@@ -840,9 +1498,11 @@ function IconButton({ icon, label }: { icon: IconSvgElement; label: string }) {
 function EmailPreview({
   subject,
   content,
+  wide = false,
 }: {
   subject: string;
   content: string;
+  wide?: boolean;
 }) {
   const previewSubject =
     subject.trim().length > 0
@@ -859,21 +1519,35 @@ function EmailPreview({
       : defaultEmailContent;
 
   return (
-    <div className="w-full max-w-[240px] overflow-hidden rounded-[24px] bg-white shadow-[0_22px_50px_rgba(70,98,78,0.18)]">
-      <div className="relative h-[150px] w-full">
+    <div
+      className={`w-full overflow-hidden rounded-[24px] bg-white shadow-[0_22px_50px_rgba(70,98,78,0.18)] ${
+        wide ? "max-w-[720px]" : "max-w-[240px]"
+      }`}
+    >
+      <div className={`relative w-full ${wide ? "h-[220px]" : "h-[150px]"}`}>
         <Image
           src="/configure.png"
           alt="Memory anniversary email preview"
           fill
-          sizes="240px"
+          sizes={wide ? "720px" : "240px"}
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-        <h3 className="absolute bottom-5 left-5 right-5 text-[24px] font-semibold leading-[34px] tracking-[-0.24px] text-white">
+        <h3
+          className={`absolute bottom-5 left-5 right-5 font-semibold text-white ${
+            wide
+              ? "text-[32px] leading-[42px]"
+              : "text-[24px] leading-[34px] tracking-[-0.24px]"
+          }`}
+        >
           {previewSubject}
         </h3>
       </div>
-      <div className="flex flex-col px-7 py-7 text-center">
+      <div
+        className={`flex flex-col text-center ${
+          wide ? "px-10 py-8" : "px-7 py-7"
+        }`}
+      >
         <div className="mx-auto mb-5 h-1 w-16 rounded-full bg-[#46624E]" />
         <h4 className="text-[20px] font-medium leading-[30px] text-[#46624E]">
           A Moment Preserved
@@ -882,7 +1556,11 @@ function EmailPreview({
           Memory is a way of holding onto the things you love, the things you
           are, the things you never want to lose.
         </p>
-        <div className="mt-6 max-h-[136px] overflow-y-auto overflow-x-hidden pr-1 text-[16px] font-normal leading-8 text-[#111C2D]">
+        <div
+          className={`mt-6 overflow-y-auto overflow-x-hidden pr-1 text-[16px] font-normal leading-8 text-[#111C2D] ${
+            wide ? "max-h-[260px]" : "max-h-[136px]"
+          }`}
+        >
           {previewContent.split("\n").map((line, index) => (
             <p key={`${line}-${index}`} className={line ? "" : "h-4"}>
               {line}
