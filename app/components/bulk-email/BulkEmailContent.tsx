@@ -95,6 +95,9 @@ export function BulkEmailContent() {
   const selectedRecipients = audience.filter((person) =>
     selectedIds.includes(person.id),
   );
+  const allRecipientsSelected = audience.every((person) =>
+    selectedIds.includes(person.id),
+  );
 
   function toggleRecipient(id: string) {
     setSelectedIds((currentIds) =>
@@ -102,6 +105,10 @@ export function BulkEmailContent() {
         ? currentIds.filter((item) => item !== id)
         : [...currentIds, id],
     );
+  }
+
+  function toggleAllRecipients() {
+    setSelectedIds(allRecipientsSelected ? [] : audience.map((person) => person.id));
   }
 
   function runEditorCommand(command: string, value?: string) {
@@ -186,7 +193,13 @@ export function BulkEmailContent() {
             <thead className="bg-[#FBFCFE]">
               <tr className="text-[12px] font-bold uppercase leading-4 tracking-[0.6px] text-[#94A3B8]">
                 <th className="px-4 py-4">
-                  <span className="sr-only">Select</span>
+                  <input
+                    type="checkbox"
+                    checked={allRecipientsSelected}
+                    onChange={toggleAllRecipients}
+                    className="h-4 w-4 rounded border-[#CBD4CE] accent-[#66785F]"
+                    aria-label="Select all recipients"
+                  />
                 </th>
                 <th className="px-3 py-4">Name</th>
                 <th className="px-3 py-4">Email</th>
