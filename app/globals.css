@@ -15,3 +15,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.strictness-range::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  appearance: none;
+  background: #46624e;
+  border-radius: 9999px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.strictness-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  appearance: none;
+  background: #46624e;
+  border: 0;
+  border-radius: 9999px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
