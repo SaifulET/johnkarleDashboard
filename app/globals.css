@@ -16,6 +16,20 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+@keyframes loader-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  50% {
+    transform: translateX(130%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 .strictness-range::-webkit-slider-thumb {
   width: 20px;
   height: 20px;
