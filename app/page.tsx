@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import {
@@ -52,6 +53,22 @@ import { ProfileContent } from "./components/profile/ProfileContent";
 import { ReportsContent } from "./components/reports/ReportsContent";
 import { SettingsContent } from "./components/settings/SettingsContent";
 import { SubscriptionBillingContent as SubscriptionBillingPage } from "./components/subscription-billing/SubscriptionBillingContent";
+import {
+  getApiErrorMessage,
+  useGetAdminUserByIdQuery,
+  useGetAdminUsersQuery,
+  useGetDashboardMetricsQuery,
+  useGetNotificationsQuery,
+  useGetUnreadNotificationCountQuery,
+  useDeleteNotificationMutation,
+  useMarkAllNotificationsReadMutation,
+  useMarkNotificationReadMutation,
+  useLogoutMutation,
+} from "../lib/api";
+import { clearStoredTokens, clearStoredUser } from "../lib/auth-storage";
+import { clearSession } from "../lib/auth-slice";
+import { useAppDispatch, useAppSelector } from "../lib/hooks";
+import type { AppNotification, PublicUser } from "../lib/types";
 
 type NavKey =
   | "dashboard"
@@ -190,42 +207,6 @@ const health = [
   { label: "Vector DB", value: "99.9%", icon: Shield01Icon },
   { label: "Storage", value: "Healthy", icon: CheckmarkCircle02Icon },
   { label: "API Usage", value: "45%", icon: DatabaseIcon },
-];
-
-const notifications = [
-  {
-    title: "Flagged conversation in Sanctuary Alpha",
-    description:
-      "AI detected a potential safety violation in the 'Personal Legacy' thread of the Alpha group. Immediate review required to ensure compliance with sanctuary guidelines.",
-    time: "2 mins ago",
-    icon: Alert01Icon,
-    iconClass: "bg-[#FFF0F0] text-[#E35757]",
-    actions: [
-      { label: "Review", style: "primary" },
-      { label: "Dismiss", style: "ghost" },
-    ],
-  },
-  {
-    title: "New access request from Sarah Chen",
-    description:
-      "Sarah Chen has requested viewer access to the 'Chen Family Heritage' vault. Her identity has been verified through the lineage verification protocol.",
-    time: "45 mins ago",
-    icon: UserAdd01Icon,
-    iconClass: "bg-[#DFF4E6] text-[#55725D]",
-    actions: [
-      { label: "Approve", style: "primary" },
-      { label: "View Profile", style: "secondary" },
-    ],
-  },
-  {
-    title: "Consent log export complete",
-    description:
-      "The full compliance audit trail for Q3 is ready. This includes all user consent changes and AI processing permissions across the platform.",
-    time: "5 hours ago",
-    icon: Download01Icon,
-    iconClass: "bg-[#EEF9F0] text-[#55725D]",
-    actions: [{ label: "Download", style: "primary" }],
-  },
 ];
 
 const users: UserRecord[] = [
@@ -533,7 +514,15 @@ function Icon({
 }
 
 export default function Home() {
-  const [activeNav, setActiveNav] = useState<NavKey>("billing");
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
+  const isInitialized = useAppSelector((state) => state.auth.isInitialized);
+  const [logout, { isLoading: isLoggingOut }] = useLogoutMutation();
+  const { data: unreadCountData } = useGetUnreadNotificationCountQuery(undefined, {
+    skip: !user,
+  });
+  const [activeNav, setActiveNav] = useState<NavKey>("dashboard");
   const [platformLogo, setPlatformLogo] = useState(DEFAULT_PLATFORM_LOGO);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -545,6 +534,12 @@ export default function Home() {
     () => navItems.find((item) => item.key === activeNav)?.label ?? "Dashboard",
     [activeNav],
   );
+
+  useEffect(() => {
+    if (isInitialized && !user) {
+      router.replace("/auth/signin");
+    }
+  }, [isInitialized, router, user]);
 
   useEffect(() => {
     const savedLogo = window.localStorage.getItem(PLATFORM_LOGO_STORAGE_KEY);
@@ -564,6 +559,39 @@ export default function Home() {
     setPlatformLogo(DEFAULT_PLATFORM_LOGO);
   }
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    if (user.role === "super_admin" || user.role === "admin") {
+      return;
+    }
+
+    if (activeNav !== "settings") {
+      setActiveNav("settings");
+    }
+  }, [activeNav, user]);
+
+  async function handleLogout() {
+    try {
+      await logout().unwrap();
+    } catch {
+      // Clear the local session even if the server token was already invalidated.
+    }
+
+    clearStoredTokens();
+    clearStoredUser();
+    dispatch(clearSession());
+    router.replace("/auth/signin");
+  }
+
+  if (!isInitialized || !user) {
+    return null;
+  }
+
+  const canViewAdminDashboard = user.role === "admin" || user.role === "super_admin";
+
   return (
     <main className="min-h-screen bg-[#FAFAF7] text-[#263029]">
       <div
@@ -581,6 +609,7 @@ export default function Home() {
       <Sidebar
         activeNav={activeNav}
         platformLogo={platformLogo}
+        user={user}
         isOpen={sidebarOpen}
         onLogout={() => setLogoutOpen(true)}
         onLogoFallback={handleLogoFallback}
@@ -591,6 +620,8 @@ export default function Home() {
         }}
       />
       <Topbar
+        user={user}
+        unreadCount={unreadCountData?.count ?? 0}
         onMenuClick={() => setSidebarOpen((open) => !open)}
         onNotificationsClick={() => setContentView("notifications")}
         onProfileClick={() => setContentView("profile")}
@@ -601,9 +632,9 @@ export default function Home() {
           <NotificationsContent />
         ) : contentView === "profile" ? (
           <ProfileContent />
-        ) : activeNav === "dashboard" ? (
+        ) : activeNav === "dashboard" && canViewAdminDashboard ? (
           <DashboardContent />
-        ) : activeNav === "users" ? (
+        ) : activeNav === "users" && canViewAdminDashboard ? (
           <UserManagementContent />
         ) : activeNav === "earning" ? (
           <EarningsManagementContent />
@@ -631,9 +662,8 @@ export default function Home() {
       <LogoutConfirmModal
         open={logoutOpen}
         onCancel={() => setLogoutOpen(false)}
-        onConfirm={() => {
-          window.location.href = "/auth/signin";
-        }}
+        confirmLabel={isLoggingOut ? "Logging out..." : "Yes, Confirm"}
+        onConfirm={handleLogout}
       />
     </main>
   );
@@ -642,6 +672,7 @@ export default function Home() {
 function Sidebar({
   activeNav,
   platformLogo,
+  user,
   isOpen,
   onLogout,
   onLogoFallback,
@@ -649,12 +680,24 @@ function Sidebar({
 }: {
   activeNav: NavKey;
   platformLogo: string;
+  user: PublicUser;
   isOpen: boolean;
   onLogout: () => void;
   onLogoFallback: () => void;
   onChange: (key: NavKey) => void;
 }) {
   const hasUploadedLogo = platformLogo.startsWith("data:image/");
+  const visibleNavItems = navItems.filter((item) => {
+    if (user.role === "super_admin") {
+      return true;
+    }
+
+    if (user.role === "admin") {
+      return item.key !== "admin";
+    }
+
+    return item.key === "settings";
+  });
 
   return (
     <aside
@@ -683,7 +726,7 @@ function Sidebar({
       </div>
 
       <nav className="mt-9 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = item.key === activeNav;
 
           return (
@@ -717,10 +760,14 @@ function Sidebar({
 }
 
 function Topbar({
+  user,
+  unreadCount,
   onMenuClick,
   onNotificationsClick,
   onProfileClick,
 }: {
+  user: PublicUser;
+  unreadCount: number;
   onMenuClick: () => void;
   onNotificationsClick: () => void;
   onProfileClick: () => void;
@@ -738,7 +785,7 @@ function Topbar({
         </button>
         <div className="min-w-0">
           <p className="truncate text-[15px] font-bold leading-tight text-[#28322B] sm:text-[17px]">
-            Welcome, James
+            Welcome, {user.name.split(" ")[0] ?? user.name}
           </p>
           <p className="mt-1 hidden text-[12px] font-medium text-[#7C837C] sm:block">
             Have a nice day!
@@ -750,7 +797,7 @@ function Topbar({
         <IconButton
           label="Notifications"
           icon={Notification01Icon}
-          hasBadge
+          badgeCount={unreadCount}
           onClick={onNotificationsClick}
         />
         <IconButton label="Profile" icon={User03Icon} onClick={onProfileClick} />
@@ -762,12 +809,12 @@ function Topbar({
 function IconButton({
   label,
   icon,
-  hasBadge = false,
+  badgeCount = 0,
   onClick,
 }: {
   label: string;
   icon: IconSvgElement;
-  hasBadge?: boolean;
+  badgeCount?: number;
   onClick?: () => void;
 }) {
   return (
@@ -779,8 +826,10 @@ function IconButton({
       className="relative flex h-12 w-12 items-center justify-center rounded-full border border-[#95A092] text-[#52614F] transition hover:bg-[#F2F4EE]"
     >
       <Icon icon={icon} size={20} />
-      {hasBadge ? (
-        <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-white bg-[#FF4D4D]" />
+      {badgeCount > 0 ? (
+        <span className="absolute right-1.5 top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[#FF4D4D] px-1 text-[10px] font-bold text-white">
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </span>
       ) : null}
     </button>
   );
@@ -790,10 +839,12 @@ function LogoutConfirmModal({
   open,
   onCancel,
   onConfirm,
+  confirmLabel = "Yes, Confirm",
 }: {
   open: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  confirmLabel?: string;
 }) {
   if (!open) {
     return null;
@@ -818,7 +869,7 @@ function LogoutConfirmModal({
             onClick={onConfirm}
             className="h-10 rounded bg-[#FF4B4B] text-[14px] font-bold text-white transition hover:bg-[#E84343]"
           >
-            Yes, Confirm
+            {confirmLabel}
           </button>
         </div>
       </section>
@@ -827,6 +878,38 @@ function LogoutConfirmModal({
 }
 
 function NotificationsContent() {
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const { data, error, isLoading, isFetching } = useGetNotificationsQuery({
+    page,
+    limit: pageSize,
+  });
+  const [markNotificationRead, { isLoading: isMarkingRead }] =
+    useMarkNotificationReadMutation();
+  const [markAllNotificationsRead, { isLoading: isMarkingAllRead }] =
+    useMarkAllNotificationsReadMutation();
+  const [deleteNotification, { isLoading: isDeleting }] =
+    useDeleteNotificationMutation();
+  const notifications = data?.notifications ?? [];
+  const pagination = data?.pagination;
+  const hasUnreadNotifications = notifications.some((notification) => !notification.isRead);
+
+  async function handleMarkRead(notificationId: string) {
+    try {
+      await markNotificationRead(notificationId).unwrap();
+    } catch {
+      // Inline mutations already preserve the current list state; no extra local handling needed.
+    }
+  }
+
+  async function handleDelete(notificationId: string) {
+    try {
+      await deleteNotification(notificationId).unwrap();
+    } catch {
+      // Keep the current list visible and rely on the API error banner instead.
+    }
+  }
+
   return (
     <section className="w-full">
       <div>
@@ -839,74 +922,192 @@ function NotificationsContent() {
         </p>
       </div>
 
-      <div className="mt-8 space-y-5">
-        {notifications.map((notification) => (
-          <article
-            key={notification.title}
-            className="grid min-h-[160px] gap-5 rounded-lg border border-[#E6E6E0] bg-white px-5 py-6 shadow-[0_12px_30px_rgba(31,47,40,0.05)] sm:grid-cols-[56px_1fr_auto] sm:px-7 sm:py-7"
-          >
-            <span
-              className={`mt-1 flex h-12 w-12 items-center justify-center rounded-full ${notification.iconClass}`}
-            >
-              <Icon icon={notification.icon} />
-            </span>
-
-            <div className="min-w-0 max-w-[690px]">
-              <h2 className="text-[16px] font-bold leading-6 text-[#263247]">
-                {notification.title}
-              </h2>
-              <p className="mt-2 text-[15px] font-medium leading-7 text-[#686F6A]">
-                {notification.description}
-              </p>
-
-              <div className="mt-5 flex items-center gap-4">
-                {notification.actions.map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    className={
-                      action.style === "primary"
-                        ? "min-h-[42px] rounded bg-[#46624E] px-6 text-[14px] font-semibold text-white transition hover:bg-[#3D5745]"
-                        : action.style === "secondary"
-                          ? "min-h-[42px] rounded border border-[#D6DAD4] bg-white px-6 text-[14px] font-semibold text-[#687168] transition hover:bg-[#F2F4EE]"
-                          : "min-h-[42px] rounded px-2 text-[14px] font-semibold text-[#687168] transition hover:text-[#46624E]"
-                    }
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <p className="pt-1 text-left text-[13px] font-medium text-[#8A928B] sm:text-right">
-              {notification.time}
-            </p>
-          </article>
-        ))}
-      </div>
-
-      <div className="mt-14 flex flex-col items-center">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] font-medium text-[#8D958E]">
-          Showing 5 of 24 notifications
+          {pagination ? `${pagination.total} notification${pagination.total === 1 ? "" : "s"} found` : "Loading notifications..."}
         </p>
         <button
           type="button"
-          className="mt-4 flex min-h-[48px] items-center gap-2 rounded-full border border-[#D6DAD4] bg-white px-7 text-[15px] font-semibold text-[#6A7869] transition hover:bg-[#F2F4EE] hover:text-[#46624E]"
+          onClick={() => markAllNotificationsRead()}
+          disabled={!hasUnreadNotifications || isMarkingAllRead}
+          className="min-h-[42px] rounded border border-[#D6DAD4] bg-white px-5 text-[14px] font-semibold text-[#687168] transition hover:bg-[#F2F4EE] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            size={18}
-            strokeWidth={1.8}
-            className="h-[18px] w-[18px]"
-          />
-          <span>Load more notifications</span>
+          {isMarkingAllRead ? "Marking..." : "Mark all as read"}
         </button>
       </div>
+
+      <div className="mt-8 space-y-5">
+        {isLoading ? (
+          <article className="rounded-lg border border-[#E6E6E0] bg-white px-7 py-10 text-[14px] font-medium text-[#7B827B] shadow-[0_12px_30px_rgba(31,47,40,0.05)]">
+            Loading notifications...
+          </article>
+        ) : notifications.length > 0 ? (
+          notifications.map((notification) => (
+            <article
+              key={notification.id}
+              className={`grid min-h-[160px] gap-5 rounded-lg border px-5 py-6 shadow-[0_12px_30px_rgba(31,47,40,0.05)] sm:grid-cols-[56px_1fr_auto] sm:px-7 sm:py-7 ${
+                notification.isRead
+                  ? "border-[#ECEFE9] bg-[#FCFDFC]"
+                  : "border-[#E6E6E0] bg-white"
+              }`}
+            >
+              <span
+                className={`mt-1 flex h-12 w-12 items-center justify-center rounded-full ${getNotificationTone(notification).iconClass}`}
+              >
+                <Icon icon={getNotificationTone(notification).icon} />
+              </span>
+
+              <div className="min-w-0 max-w-[690px]">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-[16px] font-bold leading-6 text-[#263247]">
+                    {notification.title}
+                  </h2>
+                  <span
+                    className={`inline-flex min-h-[24px] items-center rounded-full px-3 text-[11px] font-bold uppercase ${
+                      notification.isRead
+                        ? "bg-[#EEF1ED] text-[#7B827B]"
+                        : "bg-[#DCEFE3] text-[#46624E]"
+                    }`}
+                  >
+                    {notification.isRead ? "Read" : "Unread"}
+                  </span>
+                </div>
+                <p className="mt-2 text-[15px] font-medium leading-7 text-[#686F6A]">
+                  {notification.message}
+                </p>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  {!notification.isRead ? (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkRead(notification.id)}
+                      disabled={isMarkingRead}
+                      className="min-h-[42px] rounded bg-[#46624E] px-6 text-[14px] font-semibold text-white transition hover:bg-[#3D5745] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Mark as read
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(notification.id)}
+                    disabled={isDeleting}
+                    className="min-h-[42px] rounded border border-[#D6DAD4] bg-white px-6 text-[14px] font-semibold text-[#687168] transition hover:bg-[#F2F4EE] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Delete
+                  </button>
+                  <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#8A928B]">
+                    {notification.priority}
+                  </span>
+                </div>
+              </div>
+
+              <p className="pt-1 text-left text-[13px] font-medium text-[#8A928B] sm:text-right">
+                {formatNotificationTime(notification.createdAt)}
+              </p>
+            </article>
+          ))
+        ) : (
+          <article className="rounded-lg border border-[#E6E6E0] bg-white px-7 py-10 text-[14px] font-medium text-[#7B827B] shadow-[0_12px_30px_rgba(31,47,40,0.05)]">
+            No notifications available.
+          </article>
+        )}
+      </div>
+
+      {pagination && pagination.totalPages > 1 ? (
+        <div className="mt-14 flex flex-col items-center">
+          <p className="text-[13px] font-medium text-[#8D958E]">
+            Showing page {pagination.page} of {pagination.totalPages}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1 || isFetching}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D6DAD4] bg-white text-[#6A7869] transition hover:bg-[#F2F4EE] hover:text-[#46624E] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft01Icon}
+                size={18}
+                strokeWidth={1.8}
+                className="h-[18px] w-[18px]"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPage((current) => Math.min(pagination.totalPages, current + 1))
+              }
+              disabled={page === pagination.totalPages || isFetching}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#D6DAD4] bg-white text-[#6A7869] transition hover:bg-[#F2F4EE] hover:text-[#46624E] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <HugeiconsIcon
+                icon={ArrowRight01Icon}
+                size={18}
+                strokeWidth={1.8}
+                className="h-[18px] w-[18px]"
+              />
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="mt-6 rounded-lg border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+          {getApiErrorMessage(error, "Notifications could not be loaded.")}
+        </p>
+      ) : null}
     </section>
   );
 }
 
+function getNotificationTone(notification: AppNotification) {
+  if (notification.priority === "high") {
+    return {
+      icon: Alert01Icon,
+      iconClass: "bg-[#FFF0F0] text-[#E35757]",
+    };
+  }
+
+  if (notification.type === "admin_broadcast") {
+    return {
+      icon: MailReceive01Icon,
+      iconClass: "bg-[#EEF4FF] text-[#4B6CB7]",
+    };
+  }
+
+  return {
+    icon: Notification01Icon,
+    iconClass: "bg-[#EEF9F0] text-[#55725D]",
+  };
+}
+
+function formatNotificationTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
 function DashboardContent() {
+  const { data, isLoading, error } = useGetDashboardMetricsQuery();
+  const dynamicMetrics = [
+    {
+      ...metrics[0],
+      value: isLoading ? "..." : String(data?.totalUsers ?? metrics[0].value),
+    },
+    {
+      ...metrics[1],
+      value: isLoading
+        ? "..."
+        : String(data?.totalActiveProfiles ?? metrics[1].value),
+    },
+    metrics[2],
+    metrics[3],
+  ];
+
   return (
     <div className="space-y-8">
       <section>
@@ -919,10 +1120,16 @@ function DashboardContent() {
       </section>
 
       <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
+        {dynamicMetrics.map((metric) => (
           <MetricCard key={metric.label} metric={metric} />
         ))}
       </section>
+
+      {error ? (
+        <p className="rounded-lg border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+          {getApiErrorMessage(error, "Dashboard metrics could not be loaded.")}
+        </p>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-6 xl:h-[505.77px] xl:grid-cols-[minmax(0,1fr)_316px]">
         <ActivityFeed />
@@ -1124,39 +1331,44 @@ function SubscriptionInsights() {
 }
 
 function UserManagementContent() {
+  const [search, setSearch] = useState("");
   const [audience, setAudience] = useState<"All Users" | "Internal">(
     "All Users",
   );
-  const [statusFilter, setStatusFilter] = useState<"All" | UserRecord["status"]>(
+  const [statusFilter, setStatusFilter] = useState<
+    "All" | "Verified" | "Unverified"
+  >(
     "All",
   );
-  const [planFilter, setPlanFilter] = useState<
-    "All" | UserRecord["subscription"]
-  >("All");
+  const [planFilter, setPlanFilter] = useState<"All" | PublicUser["role"]>("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
-  const pageSize = 4;
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const pageSize = 20;
+  const { data, isLoading, error } = useGetAdminUsersQuery({
+    page,
+    limit: pageSize,
+    search: search.trim() || undefined,
+    role: planFilter === "All" ? undefined : planFilter,
+  });
+  const backendUsers = data?.users ?? [];
+  const pagination = data?.pagination;
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
+    return backendUsers.filter((user) => {
       const matchesAudience =
-        audience === "All Users" || user.audience === "Internal";
+        audience === "All Users" || user.role !== "user";
       const matchesStatus =
-        statusFilter === "All" || user.status === statusFilter;
-      const matchesPlan =
-        planFilter === "All" || user.subscription === planFilter;
+        statusFilter === "All" ||
+        (statusFilter === "Verified" ? user.isEmailVerified : !user.isEmailVerified);
 
-      return matchesAudience && matchesStatus && matchesPlan;
+      return matchesAudience && matchesStatus;
     });
-  }, [audience, planFilter, statusFilter]);
+  }, [audience, backendUsers, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pageUsers = filteredUsers.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  const totalPages = pagination?.totalPages ?? 1;
+  const currentPage = pagination?.page ?? page;
+  const pageUsers = filteredUsers;
 
   function resetFilters() {
     setStatusFilter("All");
@@ -1170,22 +1382,22 @@ function UserManagementContent() {
       "ID",
       "Email",
       "Phone",
-      "Subscription",
-      "Profiles",
+      "Role",
+      "Family Members",
       "Last Active",
-      "Status",
-      "Region",
+      "Email Status",
+      "Address",
     ];
     const rows = filteredUsers.map((user) => [
       user.name,
       user.id,
-      user.contact,
-      user.phone,
-      user.subscription,
-      String(user.profiles),
-      user.lastActive,
-      user.status,
-      user.region,
+      user.email,
+      user.phoneNumber ?? "",
+      user.role,
+      String(user.familyMembers.length),
+      user.lastActiveAt ?? user.lastLoginAt ?? "Never",
+      user.isEmailVerified ? "Verified" : "Unverified",
+      user.address ?? "",
     ]);
     const csv = [headers, ...rows]
       .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(","))
@@ -1214,6 +1426,17 @@ function UserManagementContent() {
           </div>
 
           <div className="relative flex flex-wrap items-center gap-3 xl:pt-9">
+            <label className="flex h-10 min-w-[220px] items-center rounded-lg border border-[#E2E6EA] bg-white px-3 shadow-sm">
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by name, email, or phone"
+                className="w-full bg-transparent text-[13px] font-medium text-[#334155] outline-none placeholder:text-[#7B827B]"
+              />
+            </label>
             <div className="flex h-10 overflow-hidden rounded-lg border border-[#E2E6EA] bg-white p-1 shadow-sm">
               {(["All Users", "Internal"] as const).map((item) => (
                 <button
@@ -1274,39 +1497,32 @@ function UserManagementContent() {
                   <select
                     value={statusFilter}
                     onChange={(event) => {
-                      setStatusFilter(
-                        event.target.value as "All" | UserRecord["status"],
-                      );
+                      setStatusFilter(event.target.value as "All" | "Verified" | "Unverified");
                       setPage(1);
                     }}
                     className="mt-2 h-10 w-full rounded border border-[#D6DAD4] bg-[#FAFAF7] px-3 text-[13px] font-medium text-[#334155] outline-none"
                   >
                     <option>All</option>
-                    <option>Active</option>
-                    <option>Pending</option>
-                    <option>Suspended</option>
+                    <option>Verified</option>
+                    <option>Unverified</option>
                   </select>
                 </label>
                 <label className="mt-4 block">
                   <span className="text-[13px] font-semibold text-[#5E685F]">
-                    Subscription
+                    Role
                   </span>
                   <select
                     value={planFilter}
                     onChange={(event) => {
-                      setPlanFilter(
-                        event.target.value as
-                          | "All"
-                          | UserRecord["subscription"],
-                      );
+                      setPlanFilter(event.target.value as "All" | PublicUser["role"]);
                       setPage(1);
                     }}
                     className="mt-2 h-10 w-full rounded border border-[#D6DAD4] bg-[#FAFAF7] px-3 text-[13px] font-medium text-[#334155] outline-none"
                   >
                     <option>All</option>
-                    <option>Legacy</option>
-                    <option>Pro</option>
-                    <option>Basic</option>
+                    <option>user</option>
+                    <option>admin</option>
+                    <option>super_admin</option>
                   </select>
                 </label>
                 <button
@@ -1328,30 +1544,51 @@ function UserManagementContent() {
               <tr className="text-[11px] font-bold uppercase tracking-wide text-[#7B827B]">
                 <th className="px-7 py-5">User Name</th>
                 <th className="px-5 py-5">Contact</th>
-                <th className="px-5 py-5">Subscription</th>
-                <th className="px-5 py-5">Profiles</th>
+                <th className="px-5 py-5">Role</th>
+                <th className="px-5 py-5">Family</th>
                 <th className="px-5 py-5">Last Active</th>
-                <th className="px-5 py-5">Status</th>
+                <th className="px-5 py-5">Email</th>
               </tr>
             </thead>
             <tbody>
-              {pageUsers.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-7 py-12 text-center text-[14px] font-medium text-[#7B827B]"
+                  >
+                    Loading users...
+                  </td>
+                </tr>
+              ) : pageUsers.length > 0 ? (
                 pageUsers.map((user, index) => (
                   <tr
                     key={user.id}
                     tabIndex={0}
                     role="button"
-                    onClick={() => setSelectedUser(user)}
+                    onClick={() => setSelectedUserId(user.id)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
-                        setSelectedUser(user);
+                        event.preventDefault();
+                        setSelectedUserId(user.id);
                       }
                     }}
                     className="cursor-pointer border-t border-[#EFF0EC] bg-white transition hover:bg-[#F2F4EE]"
                   >
                     <td className="px-7 py-5">
                       <div className="flex items-center gap-4">
-                        <Avatar user={user} size="sm" />
+                        <Avatar
+                          user={{
+                            name: user.name,
+                            initials: user.name
+                              .split(" ")
+                              .map((part) => part[0])
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase(),
+                          }}
+                          size="sm"
+                        />
                         <div>
                           <p className="text-[13px] font-bold leading-5 text-[#28334A]">
                             {user.name}
@@ -1364,23 +1601,23 @@ function UserManagementContent() {
                     </td>
                     <td className="px-5 py-5">
                       <p className="text-[13px] font-medium text-[#334155]">
-                        {user.contact}
+                        {user.email}
                       </p>
                       <p className="mt-1 text-[12px] font-medium text-[#6F7670]">
-                        {user.phone}
+                        {user.phoneNumber ?? "No phone number"}
                       </p>
                     </td>
                     <td className="px-5 py-5">
-                      <SubscriptionBadge plan={user.subscription} />
+                      <RoleBadge role={user.role} />
                     </td>
                     <td className="px-5 py-5 text-[13px] font-bold text-[#334155]">
-                      {user.profiles}
+                      {user.familyMembers.length}
                     </td>
                     <td className="px-5 py-5 text-[13px] font-medium text-[#334155]">
-                      {user.lastActive}
+                      {formatRelativeDate(user.lastActiveAt ?? user.lastLoginAt)}
                     </td>
                     <td className="px-5 py-5">
-                      <StatusBadge status={user.status} />
+                      <VerificationBadge isVerified={user.isEmailVerified} />
                     </td>
                   </tr>
                 ))
@@ -1400,9 +1637,8 @@ function UserManagementContent() {
 
           <div className="flex flex-col gap-4 border-t border-[#EFF0EC] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
             <p className="text-[12px] font-medium text-[#6F7670]">
-              Showing {(currentPage - 1) * pageSize + (pageUsers.length ? 1 : 0)}{" "}
-              to {(currentPage - 1) * pageSize + pageUsers.length} of{" "}
-              {filteredUsers.length} users
+              Showing {(currentPage - 1) * pageSize + (pageUsers.length ? 1 : 0)} to{" "}
+              {(currentPage - 1) * pageSize + pageUsers.length} of {pagination?.total ?? 0} users
             </p>
 
             <div className="flex items-center gap-3">
@@ -1419,11 +1655,10 @@ function UserManagementContent() {
                   strokeWidth={1.8}
                 />
               </button>
-              {[1, 2, 3].map((item) => (
+              {Array.from({ length: Math.min(totalPages, 3) }, (_, index) => index + 1).map((item) => (
                 <button
                   key={item}
                   type="button"
-                  disabled={item > totalPages}
                   onClick={() => setPage(item)}
                   className={`h-8 min-w-8 rounded px-3 text-[13px] font-bold transition disabled:opacity-35 ${
                     currentPage === item
@@ -1452,13 +1687,61 @@ function UserManagementContent() {
             </div>
           </div>
         </div>
+        {error ? (
+          <p className="mt-4 rounded-lg border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+            {getApiErrorMessage(error, "Users could not be loaded.")}
+          </p>
+        ) : null}
       </section>
-
       <UserDetailsDrawer
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
+        userId={selectedUserId}
+        onClose={() => setSelectedUserId(null)}
       />
     </>
+  );
+}
+
+function formatRelativeDate(value?: string) {
+  if (!value) {
+    return "Never";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
+function RoleBadge({ role }: { role: PublicUser["role"] }) {
+  const className =
+    role === "super_admin"
+      ? "bg-[#21352C] text-white"
+      : role === "admin"
+        ? "bg-[#D7F2DE] text-[#55725D]"
+        : "bg-[#E7ECFA] text-[#64718C]";
+
+  return (
+    <span
+      className={`inline-flex min-h-[24px] items-center rounded-full px-3 text-[11px] font-bold ${className}`}
+    >
+      {role.replace("_", " ")}
+    </span>
+  );
+}
+
+function VerificationBadge({ isVerified }: { isVerified: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-2 text-[12px] font-bold ${
+        isVerified ? "text-[#526052]" : "text-[#D92D2D]"
+      }`}
+    >
+      <span className={`h-2 w-2 rounded-full ${isVerified ? "bg-[#55725D]" : "bg-[#D92D2D]"}`} />
+      {isVerified ? "Verified" : "Unverified"}
+    </span>
   );
 }
 
@@ -1517,35 +1800,38 @@ function StatusBadge({ status }: { status: UserRecord["status"] }) {
 }
 
 function UserDetailsDrawer({
-  user,
+  userId,
   onClose,
 }: {
-  user: UserRecord | null;
+  userId: string | null;
   onClose: () => void;
 }) {
-  const [displayUser, setDisplayUser] = useState<UserRecord | null>(user);
+  const { data, error, isLoading } = useGetAdminUserByIdQuery(userId ?? "", {
+    skip: !userId,
+  });
+  const displayUser = data?.user ?? null;
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      setDisplayUser(user);
+    if (userId) {
       const timeout = window.setTimeout(() => setIsVisible(true), 20);
 
       return () => window.clearTimeout(timeout);
     }
 
     setIsVisible(false);
-    const timeout = window.setTimeout(() => setDisplayUser(null), 320);
+    return undefined;
+  }, [userId]);
 
-    return () => window.clearTimeout(timeout);
-  }, [user]);
-
-  if (!displayUser) {
+  if (!userId) {
     return null;
   }
-
-  const visibleProfiles = displayUser.linkedProfiles.slice(0, 3);
-  const remainingProfiles = Math.max(0, displayUser.linkedProfiles.length - 3);
+  const initials = displayUser?.name
+    ?.split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() ?? "NA";
 
   return (
     <>
@@ -1575,150 +1861,91 @@ function UserDetailsDrawer({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 pb-8 pt-9">
-          <section className="flex flex-col items-center">
-            <Avatar user={displayUser} size="lg" />
-            <h3 className="mt-4 text-[22px] font-bold text-[#2D384B]">
-              {displayUser.name}
-            </h3>
-            <SubscriptionBadge plan={displayUser.subscription} />
-          </section>
-
-          <section className="mt-7 rounded-lg bg-[#F6F7FF] p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#667085]">
-              Core Information
+          {isLoading ? (
+            <p className="text-[14px] font-medium text-[#626A64]">Loading user details...</p>
+          ) : error ? (
+            <p className="rounded-lg border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+              {getApiErrorMessage(error, "User details could not be loaded.")}
             </p>
-            <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
-              <InfoItem label="Email Address" value={displayUser.contact} />
-              <InfoItem label="Phone Number" value={displayUser.phone} />
-              <InfoItem label="Joined Date" value={displayUser.joined} />
-              <InfoItem label="Region" value={displayUser.region} />
-              <InfoItem label="Account ID" value={displayUser.id} />
-              <InfoItem label="Risk Level" value={displayUser.risk} />
-            </div>
-          </section>
+          ) : displayUser ? (
+            <>
+              <section className="flex flex-col items-center">
+                <Avatar
+                  user={{ name: displayUser.name, initials }}
+                  size="lg"
+                />
+                <h3 className="mt-4 text-[22px] font-bold text-[#2D384B]">
+                  {displayUser.name}
+                </h3>
+                <RoleBadge role={displayUser.role} />
+              </section>
 
-          <section className="mt-7">
-            <div className="flex items-center justify-between">
-              <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-                Linked Profiles ({displayUser.profiles})
-              </p>
-              <button
-                type="button"
-                className="text-[11px] font-bold text-[#46624E]"
-              >
-                View All
-              </button>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {visibleProfiles.map((profile) => (
-                <div
-                  key={profile}
-                  className="flex min-h-[48px] items-center gap-3 rounded-lg border border-[#E6E6E0] bg-white px-3"
-                >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#21352C] text-[10px] font-bold text-white">
-                    {profile
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")
-                      .slice(0, 2)}
-                  </span>
-                  <span className="text-[12px] font-bold text-[#334155]">
-                    {profile}
-                  </span>
+              <section className="mt-7 rounded-lg bg-[#F6F7FF] p-5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+                  Core Information
+                </p>
+                <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
+                  <InfoItem label="Email Address" value={displayUser.email} />
+                  <InfoItem
+                    label="Phone Number"
+                    value={displayUser.phoneNumber ?? "Not provided"}
+                  />
+                  <InfoItem
+                    label="Joined Date"
+                    value={new Date(displayUser.createdAt).toLocaleString()}
+                  />
+                  <InfoItem
+                    label="Last Active"
+                    value={formatRelativeDate(displayUser.lastActiveAt ?? displayUser.lastLoginAt)}
+                  />
+                  <InfoItem label="Account ID" value={displayUser.id} />
+                  <InfoItem
+                    label="Address"
+                    value={displayUser.address ?? "Not provided"}
+                  />
                 </div>
-              ))}
-              {remainingProfiles > 0 ? (
-                <button
-                  type="button"
-                  className="min-h-[48px] rounded-lg border border-dashed border-[#C9CEC7] text-[12px] font-semibold text-[#6F7670]"
-                >
-                  +{remainingProfiles} more
-                </button>
-              ) : null}
-            </div>
-          </section>
+              </section>
 
-          <section className="mt-7">
-            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-              Billing History Overview
-            </p>
-            <div className="mt-4 space-y-4">
-              {displayUser.billingHistory.map((item) => (
-                <div
-                  key={`${item.invoice}-${item.date}`}
-                  className="flex items-center justify-between text-[12px] font-bold text-[#334155]"
-                >
-                  <span className="flex items-center gap-2">
-                    <HugeiconsIcon
-                      icon={Invoice01Icon}
-                      size={18}
-                      strokeWidth={1.8}
-                      className="text-[#667085]"
-                    />
-                    {item.invoice} - {item.date}
-                  </span>
-                  <span>{item.amount}</span>
+              <section className="mt-7 rounded-lg border border-[#E6E6E0] p-5">
+                <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
+                  Account Summary
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <InfoStat
+                    label="Email Status"
+                    value={displayUser.isEmailVerified ? "Verified" : "Unverified"}
+                  />
+                  <InfoStat
+                    label="Family Members"
+                    value={String(displayUser.familyMembers.length)}
+                  />
+                  <InfoStat
+                    label="Legacy Access"
+                    value={displayUser.legacyAccessEnabled ? "Enabled" : "Disabled"}
+                  />
+                  <InfoStat label="Role" value={displayUser.role.replace("_", " ")} />
                 </div>
-              ))}
-            </div>
-          </section>
+              </section>
 
-          <section className="mt-7 space-y-3">
-            <DrawerLink
-              icon={LockPasswordIcon}
-              title="2FA Enabled"
-              description="Protected via SMS"
-            />
-            <DrawerLink
-              icon={CheckmarkSquare01Icon}
-              title="Consents Agreement"
-              description="Privacy V2.1 Signed"
-            />
-            <DrawerLink
-              icon={Calendar01Icon}
-              title="Next Review"
-              description="Scheduled compliance check in 18 days"
-            />
-          </section>
-
-          <section className="mt-7 rounded-lg border border-[#E6E6E0] p-5">
-            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-              Usage Summary
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <InfoStat label="Storage" value={displayUser.storage} />
-              <InfoStat label="Memories" value={String(displayUser.memories)} />
-              <InfoStat
-                label="AI Chats"
-                value={String(displayUser.aiConversations)}
-              />
-              <InfoStat label="Role" value={displayUser.role} />
-            </div>
-          </section>
-
-          <section className="mt-7">
-            <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#334155]">
-              Recent Activity
-            </p>
-            <div className="mt-4 space-y-4">
-              {displayUser.activityLog.map((item) => (
-                <div key={item} className="flex gap-3">
-                  <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#55725D]" />
-                  <p className="text-[13px] font-medium leading-5 text-[#626A64]">
-                    {item}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <button
-            type="button"
-            className="mt-10 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#E35757] text-[13px] font-bold text-[#D92D2D] transition hover:bg-[#FFF0F0]"
-          >
-            <HugeiconsIcon icon={CancelCircleIcon} size={18} strokeWidth={1.8} />
-            Suspend Account Access
-          </button>
+              <section className="mt-7 space-y-3">
+                <DrawerLink
+                  icon={CheckmarkSquare01Icon}
+                  title="Sanitized admin view"
+                  description="This drawer only shows backend-supported user details."
+                />
+                <DrawerLink
+                  icon={LockPasswordIcon}
+                  title="Profile management"
+                  description="Editing user records is not exposed by the current admin API."
+                />
+                <DrawerLink
+                  icon={Calendar01Icon}
+                  title="Extra analytics"
+                  description="Billing, activity, and compliance panels remain preserved elsewhere."
+                />
+              </section>
+            </>
+          ) : null}
         </div>
       </aside>
     </>

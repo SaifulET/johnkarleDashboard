@@ -3,14 +3,52 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useLoginMutation, getApiErrorMessage } from "../../../lib/api";
+import { setStoredTokens, setStoredUser } from "../../../lib/auth-storage";
+import { setSession } from "../../../lib/auth-slice";
+import { useAppDispatch, useAppSelector } from "../../../lib/hooks";
+import { PasswordResetFlow } from "../../components/auth/PasswordResetFlow";
 
 export default function SignInPage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
+  const isInitialized = useAppSelector((state) => state.auth.isInitialized);
+  const [login, { isLoading }] = useLoginMutation();
+  const [errorMessage, setErrorMessage] = useState("");
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (user) {
+      router.replace("/");
+    }
+  }, [router, user]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/");
+    setErrorMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "");
+
+    try {
+      const response = await login({ email, password }).unwrap();
+      setStoredTokens({
+        accessToken: response.tokens.accessToken,
+        refreshToken: response.tokens.refreshToken,
+      });
+      setStoredUser(response.user);
+      dispatch(setSession(response.user));
+      router.replace("/");
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Sign in failed."));
+    }
+  }
+
+  if (!isInitialized) {
+    return null;
   }
 
   return (
@@ -54,6 +92,7 @@ export default function SignInPage() {
                 Email address
               </span>
               <input
+                name="email"
                 type="email"
                 autoComplete="email"
                 required
@@ -67,6 +106,7 @@ export default function SignInPage() {
                 Password
               </span>
               <input
+                name="password"
                 type="password"
                 autoComplete="current-password"
                 required
@@ -85,17 +125,25 @@ export default function SignInPage() {
               </label>
               <button
                 type="button"
+                onClick={() => setForgotPasswordOpen(true)}
                 className="text-[13px] font-bold text-[#46624E] transition hover:text-[#314936]"
               >
                 Forgot password?
               </button>
             </div>
 
+            {errorMessage ? (
+              <p className="mt-4 rounded border border-[#E9C4C4] bg-[#FFF6F6] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+                {errorMessage}
+              </p>
+            ) : null}
+
             <button
               type="submit"
+              disabled={isLoading}
               className="mt-7 h-12 w-full rounded bg-[#46624E] text-[14px] font-bold text-white transition hover:bg-[#3D5745]"
             >
-              Sign In
+              {isLoading ? "Signing In..." : "Sign In"}
             </button>
           </form>
         </div>
@@ -120,6 +168,29 @@ export default function SignInPage() {
           </h2>
         </div>
       </section>
+      {forgotPasswordOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#263029]/45 px-4">
+          <section className="w-full max-w-[640px] rounded-lg bg-white p-6 shadow-[0_24px_70px_rgba(31,47,40,0.18)] sm:p-8">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-[28px] font-bold leading-tight text-[#172235]">
+                Forgot Password
+              </h2>
+              <button
+                type="button"
+                onClick={() => setForgotPasswordOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded text-[#526052] transition hover:bg-[#F2F4EE]"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-6">
+              <PasswordResetFlow
+                onComplete={() => setForgotPasswordOpen(false)}
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useRef,
-  useState,
-  type ChangeEvent,
-  type DragEvent,
-} from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ImageUploadIcon,
@@ -13,8 +8,13 @@ import {
   ViewIcon,
   ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
+import { getApiErrorMessage, useCreateAdminMutation } from "../../../lib/api";
+
+const passwordRule =
+  "Minimum 8 characters, with uppercase, lowercase, and a number.";
 
 export function CreateAdminContent() {
+  const [createAdmin, { isLoading }] = useCreateAdminMutation();
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -22,6 +22,8 @@ export function CreateAdminContent() {
     "PNG, JPG, or SVG up to 2MB",
   );
   const [profileImageError, setProfileImageError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   function uploadProfileImage(file: File | undefined) {
@@ -73,6 +75,39 @@ export function CreateAdminContent() {
     uploadProfileImage(event.dataTransfer.files?.[0]);
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Confirm password must match the new password.");
+      return;
+    }
+
+    try {
+      await createAdmin({
+        name,
+        email,
+        password,
+        ...(profileImage ? { profileImage } : {}),
+      }).unwrap();
+
+      event.currentTarget.reset();
+      setProfileImage(null);
+      setProfileImageMessage("PNG, JPG, or SVG up to 2MB");
+      setSuccessMessage("Admin account created successfully.");
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Admin account could not be created."));
+    }
+  }
+
   return (
     <section className="w-full">
       <div className="overflow-hidden rounded-lg border border-[#E2E6DF] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.08)]">
@@ -90,27 +125,34 @@ export function CreateAdminContent() {
           </div>
         </div>
 
-        <form className="px-5 py-6 sm:px-7 sm:py-7">
+        <form onSubmit={handleSubmit} className="px-5 py-6 sm:px-7 sm:py-7">
           <div className="space-y-6">
-            <AdminTextField label="Name" defaultValue="jhon doe" />
-            <AdminTextField label="Email" defaultValue="abc@gmail.com" />
+            <AdminTextField label="Name" name="name" placeholder="John Doe" />
+            <AdminTextField
+              label="Email"
+              name="email"
+              type="email"
+              placeholder="admin@example.com"
+            />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <AdminPasswordField
                 label="New Password"
+                name="password"
                 placeholder="Enter new password"
                 visible={showNewPassword}
                 onToggle={() => setShowNewPassword((visible) => !visible)}
               />
               <AdminPasswordField
                 label="Confirm New Password"
+                name="confirmPassword"
                 placeholder="Confirm new password"
                 visible={showConfirmPassword}
-                onToggle={() =>
-                  setShowConfirmPassword((visible) => !visible)
-                }
+                onToggle={() => setShowConfirmPassword((visible) => !visible)}
               />
             </div>
+
+            <p className="text-[12px] font-medium text-[#6B7280]">{passwordRule}</p>
 
             <div>
               <label className="text-[15px] font-semibold text-[#3F4642]">
@@ -157,12 +199,25 @@ export function CreateAdminContent() {
             </div>
           </div>
 
+          {errorMessage ? (
+            <p className="mt-6 rounded border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+              {errorMessage}
+            </p>
+          ) : null}
+
+          {successMessage ? (
+            <p className="mt-6 rounded border border-[#D7E9DA] bg-[#F5FBF6] px-4 py-3 text-[13px] font-medium text-[#46624E]">
+              {successMessage}
+            </p>
+          ) : null}
+
           <div className="mt-7 flex justify-center">
             <button
-              type="button"
-              className="h-12 w-full rounded-lg bg-[#66785F] px-8 text-[16px] font-bold text-white transition hover:bg-[#596B53] sm:max-w-[520px]"
+              type="submit"
+              disabled={isLoading}
+              className="h-12 w-full rounded-lg bg-[#66785F] px-8 text-[16px] font-bold text-white transition hover:bg-[#596B53] disabled:cursor-not-allowed disabled:opacity-70 sm:max-w-[520px]"
             >
-              Create Admin
+              {isLoading ? "Creating..." : "Create Admin"}
             </button>
           </div>
         </form>
@@ -173,16 +228,23 @@ export function CreateAdminContent() {
 
 function AdminTextField({
   label,
-  defaultValue,
+  name,
+  placeholder,
+  type = "text",
 }: {
   label: string;
-  defaultValue: string;
+  name: string;
+  placeholder: string;
+  type?: string;
 }) {
   return (
     <label className="block">
       <span className="text-[15px] font-semibold text-[#3F4642]">{label}</span>
       <input
-        defaultValue={defaultValue}
+        name={name}
+        type={type}
+        required
+        placeholder={placeholder}
         className="mt-3 h-11 w-full rounded-md border border-[#AEB4AE] bg-white px-3 text-[14px] font-medium text-[#334155] outline-none transition focus:border-[#66785F] focus:ring-2 focus:ring-[#66785F]/15"
       />
     </label>
@@ -191,11 +253,13 @@ function AdminTextField({
 
 function AdminPasswordField({
   label,
+  name,
   placeholder,
   visible,
   onToggle,
 }: {
   label: string;
+  name: string;
   placeholder: string;
   visible: boolean;
   onToggle: () => void;
@@ -205,6 +269,8 @@ function AdminPasswordField({
       <span className="text-[15px] font-semibold text-[#3F4642]">{label}</span>
       <span className="relative mt-3 block">
         <input
+          name={name}
+          required
           placeholder={placeholder}
           type={visible ? "text" : "password"}
           className="h-11 w-full rounded-md border border-[#AEB4AE] bg-white px-3 pr-12 text-[14px] font-medium text-[#334155] outline-none transition focus:border-[#66785F] focus:ring-2 focus:ring-[#66785F]/15"

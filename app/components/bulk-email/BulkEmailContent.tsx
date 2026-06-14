@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Attachment01Icon,
@@ -13,13 +13,8 @@ import {
   MailSend01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
-
-type EmailAudience = {
-  id: string;
-  name: string;
-  email: string;
-  status: "Active" | "Trial" | "Inactive";
-};
+import { getApiErrorMessage, useGetAdminUsersQuery, useSendBulkEmailMutation } from "../../../lib/api";
+import type { PublicUser } from "../../../lib/types";
 
 type AttachmentFile = {
   id: string;
@@ -28,47 +23,15 @@ type AttachmentFile = {
   type: string;
 };
 
-const audience: EmailAudience[] = [
-  {
-    id: "alex",
-    name: "Alex Rivera",
-    email: "alex.r@enterprise.com",
-    status: "Active",
-  },
-  {
-    id: "sarah",
-    name: "Sarah Jenkins",
-    email: "s.jenkins@globex.co",
-    status: "Trial",
-  },
-  {
-    id: "marcus",
-    name: "Marcus Thorne",
-    email: "m.thorne@startup.io",
-    status: "Active",
-  },
-  {
-    id: "elena",
-    name: "Elena Rod",
-    email: "elena.rod@design.co",
-    status: "Inactive",
-  },
-  {
-    id: "julian",
-    name: "Julian Kim",
-    email: "j.kim@techflow.net",
-    status: "Active",
-  },
-];
-
-const initialSelectedIds = ["alex", "marcus", "julian"];
-
 export function BulkEmailContent() {
+  const { data, isLoading } = useGetAdminUsersQuery({ page: 1, limit: 50 });
+  const [sendBulkEmail, { isLoading: isSending }] = useSendBulkEmailMutation();
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
+  const [subject, setSubject] = useState("Exciting New Updates to Your Workspace");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<AttachmentFile[]>([
     {
       id: "release-notes",
@@ -77,6 +40,10 @@ export function BulkEmailContent() {
       type: "application/pdf",
     },
   ]);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const audience = data?.users ?? [];
 
   const filteredAudience = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -85,19 +52,35 @@ export function BulkEmailContent() {
       return audience;
     }
 
-    return audience.filter(
-      (person) =>
+    return audience.filter((person) => {
+      const phone = person.phoneNumber?.toLowerCase() ?? "";
+
+      return (
         person.name.toLowerCase().includes(normalized) ||
-        person.email.toLowerCase().includes(normalized),
-    );
-  }, [query]);
+        person.email.toLowerCase().includes(normalized) ||
+        phone.includes(normalized)
+      );
+    });
+  }, [audience, query]);
 
   const selectedRecipients = audience.filter((person) =>
     selectedIds.includes(person.id),
   );
-  const allRecipientsSelected = audience.every((person) =>
-    selectedIds.includes(person.id),
-  );
+  const allRecipientsSelected =
+    audience.length > 0 && audience.every((person) => selectedIds.includes(person.id));
+
+  useEffect(() => {
+    if (!editorRef.current) {
+      return;
+    }
+
+    editorRef.current.innerHTML = `
+      <p><strong>Hi there,</strong></p>
+      <p>We have important platform updates to share with your workspace.</p>
+      <p>Please review the latest dashboard notices and contact the admin team if you need support.</p>
+      <p>Best regards,<br />The Lineage Team</p>
+    `;
+  }, []);
 
   function toggleRecipient(id: string) {
     setSelectedIds((currentIds) =>
@@ -159,6 +142,47 @@ export function BulkEmailContent() {
     );
   }
 
+  async function handleSendEmail() {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const message = editorRef.current?.innerText.trim() ?? "";
+
+    if (selectedIds.length === 0) {
+      setErrorMessage("Select at least one recipient before sending.");
+      return;
+    }
+
+    if (selectedIds.length > 50) {
+      setErrorMessage("You can send bulk email to at most 50 users at a time.");
+      return;
+    }
+
+    if (!subject.trim()) {
+      setErrorMessage("Email subject is required.");
+      return;
+    }
+
+    if (!message) {
+      setErrorMessage("Email message is required.");
+      return;
+    }
+
+    try {
+      const response = await sendBulkEmail({
+        userIds: selectedIds,
+        subject: subject.trim(),
+        message,
+      }).unwrap();
+
+      setSuccessMessage(
+        `Bulk email sent to ${response.sentCount} recipient${response.sentCount === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Bulk email could not be sent."));
+    }
+  }
+
   return (
     <section className="grid w-full grid-cols-1 gap-6 font-[Inter,Arial,sans-serif] xl:grid-cols-[minmax(360px,0.86fr)_1.22fr]">
       <section className="overflow-hidden rounded-lg border border-[#E8EAE8] bg-white shadow-[0_12px_30px_rgba(31,47,40,0.06)]">
@@ -176,7 +200,7 @@ export function BulkEmailContent() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search users by name or email"
+              placeholder="Search users by name, email, or phone"
               className="h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] pl-11 pr-4 text-[14px] font-normal leading-[17px] text-[#334155] outline-none transition placeholder:text-[#6B7280] focus:border-[#66785F] focus:bg-white"
             />
           </label>
@@ -197,17 +221,27 @@ export function BulkEmailContent() {
                     type="checkbox"
                     checked={allRecipientsSelected}
                     onChange={toggleAllRecipients}
+                    disabled={isLoading}
                     className="h-4 w-4 rounded border-[#CBD4CE] accent-[#66785F]"
                     aria-label="Select all recipients"
                   />
                 </th>
                 <th className="px-3 py-4">Name</th>
                 <th className="px-3 py-4">Email</th>
-                <th className="px-3 py-4 text-center">Status</th>
+                <th className="px-3 py-4 text-center">Role</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAudience.map((person) => {
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-4 py-8 text-center text-[14px] font-medium text-[#94A3B8]"
+                  >
+                    Loading recipients...
+                  </td>
+                </tr>
+              ) : filteredAudience.map((person) => {
                 const selected = selectedIds.includes(person.id);
 
                 return (
@@ -225,9 +259,7 @@ export function BulkEmailContent() {
                       />
                     </td>
                     <td className="px-3 py-4 align-middle">
-                      <span className="block leading-[19px]">
-                        {person.name}
-                      </span>
+                      <span className="block leading-[19px]">{person.name}</span>
                     </td>
                     <td className="px-3 py-4 align-middle text-[#64748B]">
                       <span className="block break-all leading-[19px]">
@@ -235,7 +267,7 @@ export function BulkEmailContent() {
                       </span>
                     </td>
                     <td className="px-3 py-4 text-center align-middle">
-                      <StatusPill status={person.status} />
+                      <StatusPill user={person} />
                     </td>
                   </tr>
                 );
@@ -252,10 +284,12 @@ export function BulkEmailContent() {
           </h1>
           <button
             type="button"
-            className="flex h-11 items-center justify-center gap-3 rounded-lg bg-[#66785F] px-8 text-[16px] font-normal leading-6 text-white shadow-[0_5px_14px_rgba(31,47,40,0.18)] transition hover:bg-[#596B53]"
+            onClick={handleSendEmail}
+            disabled={isSending || isLoading}
+            className="flex h-11 items-center justify-center gap-3 rounded-lg bg-[#66785F] px-8 text-[16px] font-normal leading-6 text-white shadow-[0_5px_14px_rgba(31,47,40,0.18)] transition hover:bg-[#596B53] disabled:cursor-not-allowed disabled:opacity-70"
           >
             <HugeiconsIcon icon={MailSend01Icon} size={18} strokeWidth={1.8} />
-            Send Email
+            {isSending ? "Sending..." : "Send Email"}
           </button>
         </div>
 
@@ -299,7 +333,8 @@ export function BulkEmailContent() {
               Email Subject
             </span>
             <input
-              defaultValue="Exciting New Updates to Your Workspace"
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
               className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[14px] font-semibold leading-5 text-[#1E293B] outline-none transition focus:border-[#66785F] focus:bg-white"
             />
           </label>
@@ -313,10 +348,7 @@ export function BulkEmailContent() {
                 <ToolbarButton label="Bold" onClick={() => runEditorCommand("bold")}>
                   B
                 </ToolbarButton>
-                <ToolbarButton
-                  label="Italic"
-                  onClick={() => runEditorCommand("italic")}
-                >
+                <ToolbarButton label="Italic" onClick={() => runEditorCommand("italic")}>
                   <span className="italic">I</span>
                 </ToolbarButton>
                 <ToolbarButton
@@ -326,10 +358,7 @@ export function BulkEmailContent() {
                   <span className="underline">U</span>
                 </ToolbarButton>
                 <ToolbarDivider />
-                <ToolbarButton
-                  label="Align left"
-                  onClick={() => runEditorCommand("justifyLeft")}
-                >
+                <ToolbarButton label="Align left" onClick={() => runEditorCommand("justifyLeft")}>
                   <span className="text-[11px]">L</span>
                 </ToolbarButton>
                 <ToolbarButton
@@ -338,10 +367,7 @@ export function BulkEmailContent() {
                 >
                   <span className="text-[11px]">C</span>
                 </ToolbarButton>
-                <ToolbarButton
-                  label="Align right"
-                  onClick={() => runEditorCommand("justifyRight")}
-                >
+                <ToolbarButton label="Align right" onClick={() => runEditorCommand("justifyRight")}>
                   <span className="text-[11px]">R</span>
                 </ToolbarButton>
                 <ToolbarButton
@@ -369,11 +395,7 @@ export function BulkEmailContent() {
                   <HugeiconsIcon icon={Link01Icon} size={17} strokeWidth={1.8} />
                 </ToolbarButton>
                 <ToolbarButton label="Insert image" onClick={addImage}>
-                  <HugeiconsIcon
-                    icon={Image01Icon}
-                    size={17}
-                    strokeWidth={1.8}
-                  />
+                  <HugeiconsIcon icon={Image01Icon} size={17} strokeWidth={1.8} />
                 </ToolbarButton>
                 <ToolbarButton
                   label="HTML block"
@@ -399,35 +421,7 @@ export function BulkEmailContent() {
                 contentEditable
                 suppressContentEditableWarning
                 className="min-h-[300px] px-7 py-7 text-[14px] font-normal leading-[23px] text-[#334155] outline-none [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg [&_li]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p:first-child]:text-[18px] [&_p:first-child]:font-bold [&_p:first-child]:leading-7 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-6"
-              >
-                <p>
-                  <strong>Hi there,</strong>
-                </p>
-                <p>
-                  We&apos;ve been working hard to bring you a better experience.
-                  In our latest update, we&apos;ve introduced several key
-                  features designed to streamline your administrative workflow:
-                </p>
-                <p>
-                  <strong>Automated Reporting:</strong> Get insights delivered
-                  straight to your inbox every Monday.
-                  <br />
-                  <strong>Smart Filters:</strong> Drill down into your user base
-                  with surgical precision.
-                  <br />
-                  <strong>Performance Boost:</strong> The dashboard now loads
-                  40% faster.
-                </p>
-                <p>
-                  Check out the new features today and let us know what you
-                  think!
-                </p>
-                <p>
-                  Best regards,
-                  <br />
-                  The MailFlow Team
-                </p>
-              </div>
+              />
             </div>
           </div>
 
@@ -478,24 +472,43 @@ export function BulkEmailContent() {
             ) : null}
           </div>
         </div>
+
+        {errorMessage ? (
+          <p className="mt-5 rounded border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        {successMessage ? (
+          <p className="mt-5 rounded border border-[#D7E9DA] bg-[#F5FBF6] px-4 py-3 text-[13px] font-medium text-[#46624E]">
+            {successMessage}
+          </p>
+        ) : null}
       </section>
     </section>
   );
 }
 
-function StatusPill({ status }: { status: EmailAudience["status"] }) {
+function StatusPill({ user }: { user: PublicUser }) {
   const className =
-    status === "Active"
+    user.role === "super_admin"
       ? "bg-[#E2F4E7] text-[#15803D]"
-      : status === "Trial"
+      : user.role === "admin"
         ? "bg-[#FFF4C8] text-[#B45309]"
         : "bg-[#EDF1F6] text-[#64748B]";
+
+  const label =
+    user.role === "super_admin"
+      ? "Super Admin"
+      : user.role === "admin"
+        ? "Admin"
+        : "User";
 
   return (
     <span
       className={`inline-flex min-h-6 items-center justify-center rounded-full px-3 text-[10px] font-bold uppercase leading-3 ${className}`}
     >
-      {status}
+      {label}
     </span>
   );
 }
