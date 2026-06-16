@@ -62,6 +62,37 @@ export type AdminDashboardMetrics = {
   totalActiveProfiles: number;
 };
 
+export type AdminRecentActivity = {
+  id: string;
+  type: string;
+  message: string;
+  actor?: {
+    id: string;
+    name?: string;
+    email?: string;
+    role?: UserRole | string;
+  };
+  target?: {
+    type?: string;
+    id?: string;
+    label?: string;
+  };
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AdminRecentActivitiesResponse = {
+  activities: AdminRecentActivity[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage?: boolean;
+    hasPrevPage?: boolean;
+  };
+};
+
 export type AdminUsersResponse = {
   users: PublicUser[];
   pagination: {
@@ -69,6 +100,29 @@ export type AdminUsersResponse = {
     limit: number;
     total: number;
     totalPages: number;
+  };
+};
+
+export type AdminEmailTemplate = {
+  id: string;
+  templateName: string;
+  subjectLine: string;
+  content: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminEmailTemplatesResponse = {
+  templates: AdminEmailTemplate[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage?: boolean;
+    hasPrevPage?: boolean;
   };
 };
 

@@ -22,8 +22,7 @@ type ProfileTab = "profile" | "password";
 export function ProfileContent() {
   const [activeTab, setActiveTab] = useState<ProfileTab>("profile");
   const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [imageUrlDraft, setImageUrlDraft] = useState("");
-  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImageMessage, setProfileImageMessage] = useState("");
   const [profileImageError, setProfileImageError] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -32,14 +31,24 @@ export function ProfileContent() {
 
   useEffect(() => {
     setProfileImage(user?.profilePicture?.url ?? null);
-    setImageUrlDraft(user?.profilePicture?.url ?? "");
+    setProfileImageFile(null);
     setProfileImageMessage(
       user?.profilePicture?.url
         ? "Click the avatar to replace your photo."
-        : "Click the avatar to add a profile photo.",
+        : "Click to upload a profile photo.",
     );
     setProfileImageError(false);
   }, [user?.profilePicture?.url]);
+
+  useEffect(() => {
+    if (!profileImage?.startsWith("blob:")) {
+      return;
+    }
+
+    return () => {
+      URL.revokeObjectURL(profileImage);
+    };
+  }, [profileImage]);
 
   if (isLoading) {
     return (
@@ -61,33 +70,37 @@ export function ProfileContent() {
 
   const currentUser = data.user;
 
-  function handleAvatarUrlApply() {
-    const nextUrl = imageUrlDraft.trim();
-
-    if (!nextUrl) {
-      setProfileImage(null);
-      setProfileImageMessage("Photo removed. Save profile to apply the change.");
-      setProfileImageError(false);
-      setAvatarEditorOpen(false);
+  function uploadProfileImage(file: File | undefined) {
+    if (!file) {
       return;
     }
 
-    try {
-      const parsed = new URL(nextUrl);
-
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error("Invalid protocol");
-      }
-    } catch {
-      setProfileImageMessage("Enter a valid image URL starting with http:// or https://.");
+    if (!file.type.startsWith("image/")) {
+      setProfileImageMessage("Please choose a valid image file.");
       setProfileImageError(true);
       return;
     }
 
-    setProfileImage(nextUrl);
-    setProfileImageMessage("Photo preview updated. Save profile to apply the change.");
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileImageMessage("Image must be 2MB or smaller.");
+      setProfileImageError(true);
+      return;
+    }
+
+    setProfileImage(URL.createObjectURL(file));
+    setProfileImageFile(file);
+    setProfileImageMessage(file.name);
     setProfileImageError(false);
-    setAvatarEditorOpen(false);
+  }
+
+  function handleProfileImageChange(event: ChangeEvent<HTMLInputElement>) {
+    uploadProfileImage(event.target.files?.[0]);
+    event.target.value = "";
+  }
+
+  function handleProfileImageDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    uploadProfileImage(event.dataTransfer.files?.[0]);
   }
 
   return (
@@ -103,7 +116,9 @@ export function ProfileContent() {
           <section className="flex flex-col items-center border-b border-[#F0F1EF] pb-7">
             <button
               type="button"
-              onClick={() => setAvatarEditorOpen((open) => !open)}
+              onClick={() => imageInputRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleProfileImageDrop}
               className="group relative rounded-full outline-none transition focus-visible:ring-4 focus-visible:ring-[#66785F]/20"
             >
               <span
@@ -132,6 +147,13 @@ export function ProfileContent() {
                 <HugeiconsIcon icon={Edit02Icon} size={18} strokeWidth={1.8} />
               </span>
             </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleProfileImageChange}
+            />
             <h2 className="mt-4 text-center text-[30px] font-bold text-[#2D384B]">
               {currentUser.name}
             </h2>
@@ -145,57 +167,6 @@ export function ProfileContent() {
             >
               {profileImageMessage}
             </p>
-            {avatarEditorOpen ? (
-              <div className="mt-5 w-full max-w-[460px] rounded-2xl border border-[#E2E6DF] bg-[#FAFBF8] p-4 shadow-[0_16px_40px_rgba(31,47,40,0.06)]">
-                <label className="block">
-                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#6F826C]">
-                    Profile Photo URL
-                  </span>
-                  <input
-                    value={imageUrlDraft}
-                    onChange={(event) => setImageUrlDraft(event.target.value)}
-                    placeholder="https://example.com/avatar.jpg"
-                    className="mt-3 h-11 w-full rounded-xl border border-[#D6DAD4] bg-white px-4 text-[14px] font-medium text-[#334155] outline-none transition focus:border-[#66785F] focus:ring-2 focus:ring-[#66785F]/15"
-                  />
-                </label>
-                <p className="mt-3 text-[12px] leading-6 text-[#667085]">
-                  The backend currently accepts an image URL here, not a direct file upload.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleAvatarUrlApply}
-                    className="h-10 rounded-xl bg-[#66785F] px-5 text-[13px] font-bold text-white transition hover:bg-[#596B53]"
-                  >
-                    Apply Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageUrlDraft(profileImage ?? "");
-                      setAvatarEditorOpen(false);
-                      setProfileImageError(false);
-                    }}
-                    className="h-10 rounded-xl border border-[#D6DAD4] bg-white px-5 text-[13px] font-bold text-[#526052] transition hover:bg-[#F2F4EE]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImageUrlDraft("");
-                      setProfileImage(null);
-                      setProfileImageMessage("Photo removed. Save profile to apply the change.");
-                      setProfileImageError(false);
-                      setAvatarEditorOpen(false);
-                    }}
-                    className="h-10 rounded-xl border border-[#E7D7D7] bg-white px-5 text-[13px] font-bold text-[#A63C3C] transition hover:bg-[#FFF7F7]"
-                  >
-                    Remove Photo
-                  </button>
-                </div>
-              </div>
-            ) : null}
           </section>
 
           <div className="mt-5 flex justify-center gap-8 text-[13px] font-bold">
@@ -232,11 +203,12 @@ export function ProfileContent() {
                 phone={currentUser.phoneNumber ?? ""}
                 address={currentUser.address ?? ""}
                 profileImage={profileImage}
+                profileImageFile={profileImageFile}
                 onProfileImageSaved={(nextImage) => {
                   setProfileImage(nextImage);
-                  setImageUrlDraft(nextImage ?? "");
+                  setProfileImageFile(null);
                   setProfileImageMessage(
-                    nextImage ? "Click the avatar to replace your photo." : "Click the avatar to add a profile photo.",
+                    nextImage ? "Click the avatar to replace your photo." : "Click to upload a profile photo.",
                   );
                   setProfileImageError(false);
                 }}
@@ -257,6 +229,7 @@ function ProfileForm({
   phone,
   address,
   profileImage,
+  profileImageFile,
   onProfileImageSaved,
 }: {
   name: string;
@@ -264,6 +237,7 @@ function ProfileForm({
   phone: string;
   address: string;
   profileImage: string | null;
+  profileImageFile: File | null;
   onProfileImageSaved: (value: string | null) => void;
 }) {
   const [updateProfile, { isLoading }] = useUpdateAdminProfileMutation();
@@ -276,16 +250,29 @@ function ProfileForm({
     setSuccessMessage("");
 
     const formData = new FormData(event.currentTarget);
+    const payload = new FormData();
+    const nameValue = String(formData.get("name") ?? "").trim();
+    const phoneValue = String(formData.get("phone") ?? "").trim();
+    const addressValue = String(formData.get("address") ?? "").trim();
+
+    payload.append("name", nameValue);
+
+    if (phoneValue) {
+      payload.append("phone", phoneValue);
+    }
+
+    if (addressValue) {
+      payload.append("address", addressValue);
+    }
+
+    if (profileImageFile) {
+      payload.append("profileImage", profileImageFile);
+    }
 
     try {
-      const response = await updateProfile({
-        name: String(formData.get("name") ?? "").trim(),
-        phone: String(formData.get("phone") ?? "").trim() || undefined,
-        address: String(formData.get("address") ?? "").trim() || undefined,
-        ...(profileImage ? { profileImage } : {}),
-      }).unwrap();
+      const response = await updateProfile(payload).unwrap();
       setStoredUser(response.user);
-      onProfileImageSaved(response.user.profilePicture?.url ?? profileImage);
+      onProfileImageSaved(response.user.profilePicture?.url ?? profileImage ?? null);
       setSuccessMessage("Profile updated successfully.");
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Profile could not be updated."));

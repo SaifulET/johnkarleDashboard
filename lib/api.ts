@@ -17,6 +17,10 @@ import {
 import { clearSession } from "./auth-slice";
 import type {
   AdminDashboardMetrics,
+  AdminEmailTemplate,
+  AdminEmailTemplatesResponse,
+  AdminRecentActivity,
+  AdminRecentActivitiesResponse,
   ReportFeedback,
   ReportFeedbackListResponse,
   AdminSettings,
@@ -118,7 +122,9 @@ export const api = createApi({
   tagTypes: [
     "Auth",
     "AdminMetrics",
+    "AdminRecentActivities",
     "AdminUsers",
+    "AdminEmailTemplates",
     "AdminProfile",
     "AdminSettings",
     "ReportFeedback",
@@ -183,6 +189,40 @@ export const api = createApi({
       transformResponse: unwrapEnvelope,
       providesTags: ["AdminMetrics"],
     }),
+    getDashboardRecentActivities: builder.query<
+      AdminRecentActivitiesResponse,
+      {
+        page?: number;
+        limit?: number;
+        type?: string;
+        actorId?: string;
+        targetType?: string;
+        targetId?: string;
+        from?: string;
+        to?: string;
+        search?: string;
+      }
+    >({
+      query: ({ page = 1, limit = 20, type, actorId, targetType, targetId, from, to, search }) => ({
+        url: "/admin/dashboard/recent-activities",
+        params: {
+          page,
+          limit,
+          ...(type ? { type } : {}),
+          ...(actorId ? { actorId } : {}),
+          ...(targetType ? { targetType } : {}),
+          ...(targetId ? { targetId } : {}),
+          ...(from ? { from } : {}),
+          ...(to ? { to } : {}),
+          ...(search ? { search } : {}),
+        },
+      }),
+      transformResponse: (response: ApiPaginatedEnvelope<AdminRecentActivity>) => ({
+        activities: response.data,
+        pagination: response.meta,
+      }),
+      providesTags: ["AdminRecentActivities"],
+    }),
     getAdminUsers: builder.query<
       AdminUsersResponse,
       { page?: number; limit?: number; search?: string; role?: PublicUser["role"] }
@@ -230,6 +270,88 @@ export const api = createApi({
       }),
       invalidatesTags: ["AdminUsers"],
     }),
+    createAdminEmailTemplate: builder.mutation<
+      { template: AdminEmailTemplate },
+      { templateName: string; subjectLine: string; content: string }
+    >({
+      query: (body) => ({
+        url: "/admin/email-templates",
+        method: "POST",
+        body,
+      }),
+      transformResponse: (response: ApiEnvelope<AdminEmailTemplate>) => ({
+        template: response.data,
+      }),
+      invalidatesTags: ["AdminEmailTemplates"],
+    }),
+    getAdminEmailTemplates: builder.query<
+      AdminEmailTemplatesResponse,
+      { page?: number; limit?: number; search?: string }
+    >({
+      query: ({ page = 1, limit = 20, search }) => ({
+        url: "/admin/email-templates",
+        params: {
+          page,
+          limit,
+          ...(search ? { search } : {}),
+        },
+      }),
+      transformResponse: (response: ApiPaginatedEnvelope<AdminEmailTemplate>) => ({
+        templates: response.data,
+        pagination: response.meta,
+      }),
+      providesTags: (result) => [
+        "AdminEmailTemplates",
+        ...(result?.templates.map((template) => ({
+          type: "AdminEmailTemplates" as const,
+          id: template.id,
+        })) ?? []),
+      ],
+    }),
+    getAdminEmailTemplateById: builder.query<{ template: AdminEmailTemplate }, string>({
+      query: (templateId) => `/admin/email-templates/${templateId}`,
+      transformResponse: (response: ApiEnvelope<AdminEmailTemplate>) => ({
+        template: response.data,
+      }),
+      providesTags: (_result, _error, templateId) => [
+        { type: "AdminEmailTemplates", id: templateId },
+      ],
+    }),
+    updateAdminEmailTemplate: builder.mutation<
+      { template: AdminEmailTemplate },
+      {
+        templateId: string;
+        templateName?: string;
+        subjectLine?: string;
+        content?: string;
+      }
+    >({
+      query: ({ templateId, ...body }) => ({
+        url: `/admin/email-templates/${templateId}`,
+        method: "PATCH",
+        body,
+      }),
+      transformResponse: (response: ApiEnvelope<AdminEmailTemplate>) => ({
+        template: response.data,
+      }),
+      invalidatesTags: (_result, _error, { templateId }) => [
+        "AdminEmailTemplates",
+        { type: "AdminEmailTemplates", id: templateId },
+      ],
+    }),
+    deleteAdminEmailTemplate: builder.mutation<{ message: string }, string>({
+      query: (templateId) => ({
+        url: `/admin/email-templates/${templateId}`,
+        method: "DELETE",
+      }),
+      transformResponse: (response: { success: boolean; message: string }) => ({
+        message: response.message,
+      }),
+      invalidatesTags: (_result, _error, templateId) => [
+        "AdminEmailTemplates",
+        { type: "AdminEmailTemplates", id: templateId },
+      ],
+    }),
     sendBulkEmail: builder.mutation<
       { requestedCount: number; sentCount: number },
       { userIds: string[]; subject: string; message: string }
@@ -248,10 +370,7 @@ export const api = createApi({
       }),
       providesTags: ["AdminProfile"],
     }),
-    updateAdminProfile: builder.mutation<
-      { user: PublicUser },
-      { name?: string; phone?: string; address?: string; profileImage?: string }
-    >({
+    updateAdminProfile: builder.mutation<{ user: PublicUser }, FormData>({
       query: (body) => ({
         url: "/admin/profile",
         method: "PATCH",
@@ -436,9 +555,15 @@ export const {
   useVerifyPasswordResetCodeMutation,
   useResetPasswordMutation,
   useGetDashboardMetricsQuery,
+  useGetDashboardRecentActivitiesQuery,
   useGetAdminUsersQuery,
   useGetAdminUserByIdQuery,
   useCreateAdminMutation,
+  useCreateAdminEmailTemplateMutation,
+  useGetAdminEmailTemplatesQuery,
+  useGetAdminEmailTemplateByIdQuery,
+  useUpdateAdminEmailTemplateMutation,
+  useDeleteAdminEmailTemplateMutation,
   useSendBulkEmailMutation,
   useGetAdminProfileQuery,
   useUpdateAdminProfileMutation,

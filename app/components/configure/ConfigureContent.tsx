@@ -1,8 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import { skipToken } from "@reduxjs/toolkit/query";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -39,6 +41,15 @@ import {
   SmartPhone01Icon,
   UndoIcon,
 } from "@hugeicons/core-free-icons";
+import {
+  getApiErrorMessage,
+  useCreateAdminEmailTemplateMutation,
+  useDeleteAdminEmailTemplateMutation,
+  useGetAdminEmailTemplateByIdQuery,
+  useGetAdminEmailTemplatesQuery,
+  useUpdateAdminEmailTemplateMutation,
+} from "../../../lib/api";
+import type { AdminEmailTemplate } from "../../../lib/types";
 
 type Tab = "General" | "AI Settings" | "Email Templates";
 
@@ -66,8 +77,7 @@ type EmailTemplate = {
   subject: string;
   content: string;
 };
-type StoredEmailTemplate = Omit<EmailTemplate, "icon">;
-type EmailDraft = Pick<EmailTemplate, "subject" | "content">;
+type EmailDraft = Pick<EmailTemplate, "title" | "subject" | "content">;
 
 const defaultAiSettings: AiSettings = {
   strictness: 0.8,
@@ -164,49 +174,22 @@ We invite you to step back into the vault and relive this precious moment with y
 Warmly,
 The Lineage Team`;
 
-const initialEmailTemplates: EmailTemplate[] = [
-  {
-    ...defaultEmailTemplateMetadata[0],
-    subject: defaultEmailSubject,
-    content: defaultEmailContent,
-  },
-  {
-    ...defaultEmailTemplateMetadata[1],
-    subject: "Welcome to your Lineage.AI sanctuary",
-    content: `Dear [[User_Name]],
-
-Your family archive is ready. Start by adding a memory, inviting trusted relatives, and choosing the stories you want preserved first.
-
-Warmly,
-The Lineage Team`,
-  },
-  {
-    ...defaultEmailTemplateMetadata[2],
-    subject: "Security update for your Lineage.AI account",
-    content: `Dear [[User_Name]],
-
-We noticed a security event connected to your vault. Please review your recent activity and confirm that the access was expected.
-
-Warmly,
-The Lineage Team`,
-  },
-  {
-    ...defaultEmailTemplateMetadata[3],
-    subject: "[[User_Name]] invited you to a family vault",
-    content: `Dear [[User_Name]],
-
-You have been invited to join a Lineage.AI family vault. Open the invitation to view shared memories and contribute your own stories.
-
-Warmly,
-The Lineage Team`,
-  },
-];
-
 function getEmailTemplateIcon(templateId: string) {
   return (
     defaultEmailTemplateMetadata.find((template) => template.id === templateId)
       ?.icon ?? FileEditIcon
   );
+}
+
+function toEmailTemplateView(template: AdminEmailTemplate): EmailTemplate {
+  return {
+    id: template.id,
+    icon: getEmailTemplateIcon(template.id),
+    title: template.templateName,
+    description: template.subjectLine,
+    subject: template.subjectLine,
+    content: template.content,
+  };
 }
 
 export function ConfigureContent({
@@ -218,13 +201,57 @@ export function ConfigureContent({
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("General");
   const [aiSettings, setAiSettings] = useState<AiSettings>(defaultAiSettings);
-  const [emailTemplatesState, setEmailTemplatesState] =
-    useState<EmailTemplate[]>(initialEmailTemplates);
-  const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState(
-    initialEmailTemplates[0].id,
+  const [selectedEmailTemplateId, setSelectedEmailTemplateId] = useState("");
+  const [emailTemplateDraft, setEmailTemplateDraft] = useState<EmailDraft | null>(
+    null,
   );
   const [emailTokens, setEmailTokens] = useState(defaultTokens);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+  const [templateSaveStatus, setTemplateSaveStatus] = useState<"idle" | "saved">(
+    "idle",
+  );
+  const [templateMessage, setTemplateMessage] = useState("");
+  const {
+    data: emailTemplatesData,
+    isLoading: isEmailTemplatesLoading,
+    error: emailTemplatesError,
+  } = useGetAdminEmailTemplatesQuery({ page: 1, limit: 100 });
+  const [createEmailTemplateMutation, { isLoading: isCreatingEmailTemplate }] =
+    useCreateAdminEmailTemplateMutation();
+  const [updateEmailTemplateMutation, { isLoading: isUpdatingEmailTemplate }] =
+    useUpdateAdminEmailTemplateMutation();
+  const [deleteEmailTemplateMutation, { isLoading: isDeletingEmailTemplate }] =
+    useDeleteAdminEmailTemplateMutation();
+  const emailTemplatesState = useMemo(
+    () => (emailTemplatesData?.templates ?? []).map(toEmailTemplateView),
+    [emailTemplatesData?.templates],
+  );
+  const selectedEmailTemplateQueryArg = selectedEmailTemplateId || skipToken;
+  const {
+    data: selectedEmailTemplateData,
+    isFetching: isSelectedEmailTemplateFetching,
+    error: selectedEmailTemplateError,
+  } = useGetAdminEmailTemplateByIdQuery(selectedEmailTemplateQueryArg);
+  const selectedEmailTemplate = useMemo(() => {
+    if (selectedEmailTemplateData?.template) {
+      return toEmailTemplateView(selectedEmailTemplateData.template);
+    }
+
+    return (
+      emailTemplatesState.find((template) => template.id === selectedEmailTemplateId) ??
+      emailTemplatesState[0]
+    );
+  }, [
+    emailTemplatesState,
+    selectedEmailTemplateData?.template,
+    selectedEmailTemplateId,
+  ]);
+  const templateDirty =
+    selectedEmailTemplate !== undefined &&
+    emailTemplateDraft !== null &&
+    (emailTemplateDraft.title !== selectedEmailTemplate.title ||
+      emailTemplateDraft.subject !== selectedEmailTemplate.subject ||
+      emailTemplateDraft.content !== selectedEmailTemplate.content);
 
   useEffect(() => {
     const savedConfiguration = window.localStorage.getItem(
@@ -238,7 +265,6 @@ export function ConfigureContent({
     try {
       const parsed = JSON.parse(savedConfiguration) as {
         aiSettings?: Partial<AiSettings>;
-        emailTemplates?: StoredEmailTemplate[];
         selectedEmailTemplateId?: string;
         emailTokens?: string[];
       };
@@ -254,25 +280,47 @@ export function ConfigureContent({
         });
       }
 
-      if (parsed.emailTemplates?.length) {
-        setEmailTemplatesState(
-          parsed.emailTemplates.map((template) => ({
-            ...template,
-            icon: getEmailTemplateIcon(template.id),
-          })),
-        );
-        setSelectedEmailTemplateId(
-          parsed.selectedEmailTemplateId ?? parsed.emailTemplates[0].id,
-        );
-      }
-
       if (parsed.emailTokens?.length) {
         setEmailTokens(parsed.emailTokens);
+      }
+
+      if (parsed.selectedEmailTemplateId) {
+        setSelectedEmailTemplateId(parsed.selectedEmailTemplateId);
       }
     } catch {
       window.localStorage.removeItem(CONFIGURATION_STORAGE_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (!emailTemplatesState.length) {
+      setSelectedEmailTemplateId("");
+      return;
+    }
+
+    const selectedTemplateStillExists = emailTemplatesState.some(
+      (template) => template.id === selectedEmailTemplateId,
+    );
+
+    if (!selectedEmailTemplateId || !selectedTemplateStillExists) {
+      setSelectedEmailTemplateId(emailTemplatesState[0].id);
+    }
+  }, [emailTemplatesState, selectedEmailTemplateId]);
+
+  useEffect(() => {
+    if (!selectedEmailTemplate) {
+      setEmailTemplateDraft(null);
+      return;
+    }
+
+    setEmailTemplateDraft({
+      title: selectedEmailTemplate.title,
+      subject: selectedEmailTemplate.subject,
+      content: selectedEmailTemplate.content,
+    });
+    setTemplateSaveStatus("idle");
+    setTemplateMessage("");
+  }, [selectedEmailTemplate?.id, selectedEmailTemplate]);
 
   function updateAiSettings(update: Partial<AiSettings>) {
     setAiSettings((current) => ({ ...current, ...update }));
@@ -295,40 +343,38 @@ export function ConfigureContent({
     setSaveStatus("idle");
   }
 
-  function updateEmailTemplate(
-    templateId: string,
-    update: Partial<StoredEmailTemplate>,
-  ) {
-    setEmailTemplatesState((templates) =>
-      templates.map((template) =>
-        template.id === templateId ? { ...template, ...update } : template,
-      ),
+  function updateEmailTemplateDraft(update: Partial<EmailDraft>) {
+    setEmailTemplateDraft((currentDraft) =>
+      currentDraft ? { ...currentDraft, ...update } : currentDraft,
     );
-    setSaveStatus("idle");
+    setTemplateSaveStatus("idle");
+    setTemplateMessage("");
   }
 
-  function createEmailTemplate() {
+  async function createEmailTemplate() {
     const templateNumber = emailTemplatesState.length + 1;
-    const templateId = `custom-template-${Date.now()}`;
 
-    setEmailTemplatesState((templates) => [
-      ...templates,
-      {
-        id: templateId,
-        icon: FileEditIcon,
-        title: `New Template ${templateNumber}`,
-        description: "Custom email template",
-        subject: "New email subject",
+    try {
+      const response = await createEmailTemplateMutation({
+        templateName: `New Template ${templateNumber}`,
+        subjectLine: "New email subject",
         content: `Dear [[User_Name]],
 
 Write your new message here.
 
 Warmly,
 The Lineage Team`,
-      },
-    ]);
-    setSelectedEmailTemplateId(templateId);
-    setSaveStatus("idle");
+      }).unwrap();
+
+      setSelectedEmailTemplateId(response.template.id);
+      setTemplateSaveStatus("saved");
+      setTemplateMessage("Template created successfully.");
+    } catch (error) {
+      setTemplateSaveStatus("idle");
+      setTemplateMessage(
+        getApiErrorMessage(error, "Email template could not be created."),
+      );
+    }
   }
 
   function createEmailToken(token: string) {
@@ -340,6 +386,53 @@ The Lineage Team`,
     setSaveStatus("idle");
   }
 
+  async function saveSelectedEmailTemplate() {
+    if (!selectedEmailTemplateId || !emailTemplateDraft) {
+      return;
+    }
+
+    try {
+      await updateEmailTemplateMutation({
+        templateId: selectedEmailTemplateId,
+        templateName: emailTemplateDraft.title.trim(),
+        subjectLine: emailTemplateDraft.subject.trim(),
+        content: emailTemplateDraft.content.trim(),
+      }).unwrap();
+
+      setTemplateSaveStatus("saved");
+      setTemplateMessage("Template saved successfully.");
+    } catch (error) {
+      setTemplateSaveStatus("idle");
+      setTemplateMessage(
+        getApiErrorMessage(error, "Email template could not be saved."),
+      );
+    }
+  }
+
+  async function deleteSelectedEmailTemplate() {
+    if (!selectedEmailTemplateId) {
+      return;
+    }
+
+    const nextTemplateId =
+      emailTemplatesState.find((template) => template.id !== selectedEmailTemplateId)
+        ?.id ?? "";
+
+    try {
+      const response = await deleteEmailTemplateMutation(
+        selectedEmailTemplateId,
+      ).unwrap();
+      setSelectedEmailTemplateId(nextTemplateId);
+      setTemplateSaveStatus("saved");
+      setTemplateMessage(response.message);
+    } catch (error) {
+      setTemplateSaveStatus("idle");
+      setTemplateMessage(
+        getApiErrorMessage(error, "Email template could not be deleted."),
+      );
+    }
+  }
+
   function handleSaveChanges() {
     window.localStorage.setItem(PLATFORM_LOGO_STORAGE_KEY, platformLogo);
     window.localStorage.setItem(
@@ -347,9 +440,6 @@ The Lineage Team`,
       JSON.stringify({
         platformLogo,
         aiSettings,
-        emailTemplates: emailTemplatesState.map(
-          ({ icon: _icon, ...template }) => template,
-        ),
         selectedEmailTemplateId,
         emailTokens,
         savedAt: new Date().toISOString(),
@@ -367,17 +457,19 @@ The Lineage Team`,
           </h1>
           <p className="mt-1 text-[16px] font-normal leading-6 text-[#424843]">
             Fine-tune Lineage.AI platform environment and global AI intelligence
-            preferences.
+          preferences.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleSaveChanges}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[#46624E] px-8 text-[16px] font-bold leading-6 text-white shadow-[0_10px_15px_-3px_rgba(70,98,78,0.2),0_4px_6px_-4px_rgba(70,98,78,0.2)] transition hover:bg-[#3C5544] sm:w-auto"
-        >
-          <HugeiconsIcon icon={SaveIcon} size={18} strokeWidth={1.8} />
-          {saveStatus === "saved" ? "Changes Saved" : "Save Changes"}
-        </button>
+        {activeTab !== "Email Templates" ? (
+          <button
+            type="button"
+            onClick={handleSaveChanges}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[#46624E] px-8 text-[16px] font-bold leading-6 text-white shadow-[0_10px_15px_-3px_rgba(70,98,78,0.2),0_4px_6px_-4px_rgba(70,98,78,0.2)] transition hover:bg-[#3C5544] sm:w-auto"
+          >
+            <HugeiconsIcon icon={SaveIcon} size={18} strokeWidth={1.8} />
+            {saveStatus === "saved" ? "Changes Saved" : "Save Changes"}
+          </button>
+        ) : null}
       </header>
 
       <nav className="flex w-full gap-8 overflow-x-auto border-b border-[rgba(194,200,192,0.3)]">
@@ -416,10 +508,26 @@ The Lineage Team`,
         <EmailTemplatesTab
           templates={emailTemplatesState}
           selectedTemplateId={selectedEmailTemplateId}
+          selectedTemplateDraft={emailTemplateDraft}
           tokens={emailTokens}
+          isLoading={isEmailTemplatesLoading || isSelectedEmailTemplateFetching}
+          isSaving={isCreatingEmailTemplate || isUpdatingEmailTemplate}
+          isDeleting={isDeletingEmailTemplate}
+          isDirty={templateDirty}
+          statusMessage={templateMessage}
+          errorMessage={
+            emailTemplatesError || selectedEmailTemplateError
+              ? getApiErrorMessage(
+                  emailTemplatesError ?? selectedEmailTemplateError,
+                  "Email templates could not be loaded.",
+                )
+              : ""
+          }
           onTemplateSelect={setSelectedEmailTemplateId}
           onTemplateCreate={createEmailTemplate}
-          onTemplateChange={updateEmailTemplate}
+          onTemplateChange={updateEmailTemplateDraft}
+          onTemplateSave={saveSelectedEmailTemplate}
+          onTemplateDelete={deleteSelectedEmailTemplate}
           onTokenCreate={createEmailToken}
         />
       )}
@@ -760,26 +868,46 @@ function normalizeTokenName(value: string) {
 function EmailTemplatesTab({
   templates,
   selectedTemplateId,
+  selectedTemplateDraft,
   tokens,
+  isLoading,
+  isSaving,
+  isDeleting,
+  isDirty,
+  statusMessage,
+  errorMessage,
   onTemplateSelect,
   onTemplateCreate,
   onTemplateChange,
+  onTemplateSave,
+  onTemplateDelete,
   onTokenCreate,
 }: {
   templates: EmailTemplate[];
   selectedTemplateId: string;
+  selectedTemplateDraft: EmailDraft | null;
   tokens: string[];
+  isLoading: boolean;
+  isSaving: boolean;
+  isDeleting: boolean;
+  isDirty: boolean;
+  statusMessage: string;
+  errorMessage: string;
   onTemplateSelect: (templateId: string) => void;
-  onTemplateCreate: () => void;
-  onTemplateChange: (
-    templateId: string,
-    update: Partial<StoredEmailTemplate>,
-  ) => void;
+  onTemplateCreate: () => Promise<void>;
+  onTemplateChange: (update: Partial<EmailDraft>) => void;
+  onTemplateSave: () => Promise<void>;
+  onTemplateDelete: () => Promise<void>;
   onTokenCreate: (token: string) => void;
 }) {
   const selectedTemplate =
     templates.find((template) => template.id === selectedTemplateId) ??
     templates[0];
+  const selectedDraft = selectedTemplateDraft ?? {
+    title: selectedTemplate?.title ?? "",
+    subject: selectedTemplate?.subject ?? "",
+    content: selectedTemplate?.content ?? "",
+  };
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const [history, setHistory] = useState<{
@@ -793,42 +921,45 @@ function EmailTemplatesTab({
     setHistory({ past: [], future: [] });
     setPreviewOpen(false);
 
-    if (selectedTemplate.id.startsWith("custom-template-")) {
-      window.requestAnimationFrame(() => {
-        titleInputRef.current?.focus();
-        titleInputRef.current?.select();
-      });
-    }
-  }, [selectedTemplate.id]);
+    window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  }, [selectedTemplate?.id]);
 
   function captureCurrentDraft() {
+    if (!selectedTemplate) {
+      return;
+    }
+
     setHistory((currentHistory) => ({
       past: [
         ...currentHistory.past,
         {
-          subject: selectedTemplate.subject,
-          content: selectedTemplate.content,
+          title: selectedDraft.title,
+          subject: selectedDraft.subject,
+          content: selectedDraft.content,
         },
       ],
       future: [],
     }));
   }
 
-  function updateSelectedTemplate(update: Partial<StoredEmailTemplate>) {
+  function updateSelectedTemplate(update: Partial<EmailDraft>) {
     captureCurrentDraft();
-    onTemplateChange(selectedTemplate.id, update);
+    onTemplateChange(update);
   }
 
   function insertToken(token: string, textarea = contentRef.current) {
     const insertionTarget = textarea;
     const selectionStart =
-      insertionTarget?.selectionStart ?? selectedTemplate.content.length;
+      insertionTarget?.selectionStart ?? selectedDraft.content.length;
     const selectionEnd =
-      insertionTarget?.selectionEnd ?? selectedTemplate.content.length;
-    const nextContent = `${selectedTemplate.content.slice(
+      insertionTarget?.selectionEnd ?? selectedDraft.content.length;
+    const nextContent = `${selectedDraft.content.slice(
       0,
       selectionStart,
-    )}${token}${selectedTemplate.content.slice(selectionEnd)}`;
+    )}${token}${selectedDraft.content.slice(selectionEnd)}`;
     const nextCursorPosition = selectionStart + token.length;
 
     updateSelectedTemplate({ content: nextContent });
@@ -862,7 +993,7 @@ function EmailTemplatesTab({
   function handleUndo() {
     const previousDraft = history.past.at(-1);
 
-    if (!previousDraft) {
+    if (!previousDraft || !selectedTemplate) {
       return;
     }
 
@@ -870,19 +1001,20 @@ function EmailTemplatesTab({
       past: currentHistory.past.slice(0, -1),
       future: [
         {
-          subject: selectedTemplate.subject,
-          content: selectedTemplate.content,
+          title: selectedDraft.title,
+          subject: selectedDraft.subject,
+          content: selectedDraft.content,
         },
         ...currentHistory.future,
       ],
     }));
-    onTemplateChange(selectedTemplate.id, previousDraft);
+    onTemplateChange(previousDraft);
   }
 
   function handleRedo() {
     const nextDraft = history.future[0];
 
-    if (!nextDraft) {
+    if (!nextDraft || !selectedTemplate) {
       return;
     }
 
@@ -890,13 +1022,14 @@ function EmailTemplatesTab({
       past: [
         ...currentHistory.past,
         {
-          subject: selectedTemplate.subject,
-          content: selectedTemplate.content,
+          title: selectedDraft.title,
+          subject: selectedDraft.subject,
+          content: selectedDraft.content,
         },
       ],
       future: currentHistory.future.slice(1),
     }));
-    onTemplateChange(selectedTemplate.id, nextDraft);
+    onTemplateChange(nextDraft);
   }
 
   return (
@@ -919,14 +1052,24 @@ function EmailTemplatesTab({
           </div>
 
           <div className="space-y-3">
-            {templates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                {...template}
-                active={template.id === selectedTemplate.id}
-                onSelect={() => onTemplateSelect(template.id)}
-              />
-            ))}
+            {isLoading ? (
+              <p className="rounded-[12px] border border-[#D9DDD6] bg-[#F7F8FB] px-4 py-5 text-[13px] font-medium text-[#6B7280]">
+                Loading templates...
+              </p>
+            ) : templates.length === 0 ? (
+              <p className="rounded-[12px] border border-[#D9DDD6] bg-[#F7F8FB] px-4 py-5 text-[13px] font-medium text-[#6B7280]">
+                No email templates yet. Create one to start building reusable campaigns.
+              </p>
+            ) : (
+              templates.map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  {...template}
+                  active={template.id === selectedTemplate?.id}
+                  onSelect={() => onTemplateSelect(template.id)}
+                />
+              ))
+            )}
           </div>
         </section>
 
@@ -982,9 +1125,27 @@ function EmailTemplatesTab({
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="flex items-center gap-2 text-[16px] font-semibold leading-6 text-[#111C2D]">
               <HugeiconsIcon icon={FileEditIcon} size={18} strokeWidth={1.8} />
-              Editing: {selectedTemplate.title || "Untitled Template"}
+              Editing: {selectedDraft.title || "Untitled Template"}
             </h2>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void onTemplateSave()}
+                disabled={!selectedTemplate || !isDirty || isSaving || isDeleting}
+                className="flex h-9 items-center justify-center gap-2 rounded-lg bg-[#46624E] px-3 text-[13px] font-semibold text-white transition hover:bg-[#3C5544] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <HugeiconsIcon icon={SaveIcon} size={16} strokeWidth={1.8} />
+                {isSaving ? "Saving..." : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onTemplateDelete()}
+                disabled={!selectedTemplate || isSaving || isDeleting}
+                className="flex h-9 items-center justify-center gap-2 rounded-lg border border-[#E7D7D7] bg-white px-3 text-[13px] font-semibold text-[#A63C3C] transition hover:bg-[#FFF8F8] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} size={16} strokeWidth={1.8} />
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
               <IconButton
                 icon={UndoIcon}
                 label="Undo"
@@ -1011,13 +1172,14 @@ function EmailTemplatesTab({
             </span>
             <input
               ref={titleInputRef}
-              value={selectedTemplate.title}
+              value={selectedDraft.title}
               placeholder="Untitled Template"
               onChange={(event) =>
-                onTemplateChange(selectedTemplate.id, {
+                onTemplateChange({
                   title: event.currentTarget.value,
                 })
               }
+              disabled={!selectedTemplate}
               className="mt-2 h-11 w-full rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition focus:border-[#46624E]"
             />
           </label>
@@ -1027,10 +1189,11 @@ function EmailTemplatesTab({
               Subject Line
             </span>
             <textarea
-              value={selectedTemplate.subject}
+              value={selectedDraft.subject}
               onChange={(event) =>
                 updateSelectedTemplate({ subject: event.currentTarget.value })
               }
+              disabled={!selectedTemplate}
               className="mt-2 h-16 w-full resize-none rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 py-3 text-[16px] font-normal leading-6 text-[#111C2D] outline-none transition focus:border-[#46624E]"
             />
           </label>
@@ -1041,15 +1204,28 @@ function EmailTemplatesTab({
             </span>
             <textarea
               ref={contentRef}
-              value={selectedTemplate.content}
+              value={selectedDraft.content}
               onChange={(event) =>
                 updateSelectedTemplate({ content: event.currentTarget.value })
               }
               onDragOver={(event) => event.preventDefault()}
               onDrop={handleTokenDrop}
+              disabled={!selectedTemplate}
               className="mt-2 min-h-[360px] w-full resize-none rounded-lg border border-[#DCE0D8] bg-[#FAFAF7] px-4 py-4 font-serif text-[18px] font-normal leading-[29px] text-[#111C2D] outline-none transition focus:border-[#46624E]"
             />
           </label>
+
+          {errorMessage ? (
+            <p className="mt-4 rounded-[12px] border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+              {errorMessage}
+            </p>
+          ) : null}
+
+          {statusMessage ? (
+            <p className="mt-4 rounded-[12px] border border-[#D7E9DA] bg-[#F5FBF6] px-4 py-3 text-[13px] font-medium text-[#46624E]">
+              {statusMessage}
+            </p>
+          ) : null}
 
           <div className="mt-4 rounded-[12px] bg-[#EEF7EF] p-4 text-[12px] leading-5 text-[#46624E]">
             <span className="font-bold">AI Suggestion:</span> Adding a
@@ -1060,8 +1236,8 @@ function EmailTemplatesTab({
 
         <div className="flex flex-col items-center bg-[#EEF3FF] p-5">
           <EmailPreview
-            subject={selectedTemplate.subject}
-            content={selectedTemplate.content}
+            subject={selectedDraft.subject}
+            content={selectedDraft.content}
           />
           <div className="mt-4 flex items-center gap-3 text-[#8B96A3]">
             <HugeiconsIcon icon={SmartPhone01Icon} size={18} strokeWidth={1.8} />
@@ -1087,8 +1263,8 @@ function EmailTemplatesTab({
               </button>
             </div>
             <EmailPreview
-              subject={selectedTemplate.subject}
-              content={selectedTemplate.content}
+              subject={selectedDraft.subject}
+              content={selectedDraft.content}
               wide
             />
           </div>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import {
   AiChat01Icon,
@@ -57,6 +57,7 @@ import {
   getApiErrorMessage,
   useGetAdminUserByIdQuery,
   useGetAdminUsersQuery,
+  useGetDashboardRecentActivitiesQuery,
   useGetDashboardMetricsQuery,
   useGetNotificationsQuery,
   useGetUnreadNotificationCountQuery,
@@ -68,7 +69,7 @@ import {
 import { clearStoredTokens, clearStoredUser } from "../lib/auth-storage";
 import { clearSession } from "../lib/auth-slice";
 import { useAppDispatch, useAppSelector } from "../lib/hooks";
-import type { AppNotification, PublicUser } from "../lib/types";
+import type { AdminRecentActivity, AppNotification, PublicUser } from "../lib/types";
 
 type NavKey =
   | "dashboard"
@@ -170,29 +171,6 @@ const metrics = [
     note: "64% of 10PB allocated",
     icon: DatabaseIcon,
     progress: 64,
-  },
-];
-
-const activities = [
-  {
-    title: "New profile created for Elias Vance",
-    time: "Today at 10:42 AM",
-    tone: "bg-[#46624E]",
-  },
-  {
-    title: 'Memory "First Steps" uploaded',
-    time: "Today at 09:15 AM",
-    tone: "bg-[#CAEAD5]",
-  },
-  {
-    title: "Invite accepted by Sarah Chen",
-    time: "Yesterday at 04:30 PM",
-    tone: "bg-[#E9DDFD]",
-  },
-  {
-    title: "AI conversation flagged for emotional review",
-    time: "Yesterday at 02:11 PM",
-    tone: "bg-[#FFDAD6]",
   },
 ];
 
@@ -1091,6 +1069,85 @@ function formatNotificationTime(value: string) {
   return date.toLocaleString();
 }
 
+function formatRelativeActivityTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / (1000 * 60)));
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} min${diffMinutes === 1 ? "" : "s"} ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function getActivityFeedTone(activity: AdminRecentActivity) {
+  const type = activity.type.toLowerCase();
+
+  if (
+    type.includes("cancelled") ||
+    type.includes("expired") ||
+    type.includes("removed") ||
+    type.includes("declined")
+  ) {
+    return {
+      bubbleClass: "bg-[#FFF0F0] text-[#C84D4D]",
+      icon: CancelCircleIcon,
+    };
+  }
+
+  if (type.includes("email") || type.includes("reply")) {
+    return {
+      bubbleClass: "bg-[#EEF4FF] text-[#4B6CB7]",
+      icon: MailReceive01Icon,
+    };
+  }
+
+  if (type.includes("created") || type.includes("added") || type.includes("approved")) {
+    return {
+      bubbleClass: "bg-[#EEF9F0] text-[#55725D]",
+      icon: CheckmarkCircle02Icon,
+    };
+  }
+
+  return {
+    bubbleClass: "bg-[#F4F1FF] text-[#6A5ACD]",
+    icon: Notification01Icon,
+  };
+}
+
+function getActivityFeedDetails(activity: AdminRecentActivity) {
+  const actorName = activity.actor?.name ?? activity.actor?.email;
+  const targetLabel = activity.target?.label ?? activity.target?.type;
+
+  if (actorName && targetLabel) {
+    return `${actorName} • ${targetLabel}`;
+  }
+
+  return actorName ?? targetLabel ?? activity.type.replaceAll("_", " ");
+}
+
 function DashboardContent() {
   const { data, isLoading, error } = useGetDashboardMetricsQuery();
   const dynamicMetrics = [
@@ -1219,70 +1276,82 @@ function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
 }
 
 function ActivityFeed() {
+  const { data, isLoading, error } = useGetDashboardRecentActivitiesQuery({
+    page: 1,
+    limit: 5,
+  });
+  const activities = data?.activities ?? [];
+
   return (
-    <article className="flex h-[505.75px] flex-col items-start gap-6 rounded-[16px] border border-[#E8E6E1] bg-white px-8 pb-[165.39px] pt-8 shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
+    <article className="flex min-h-[505.75px] flex-col items-start gap-6 rounded-[16px] border border-[#E8E6E1] bg-white px-8 py-8 shadow-[0_4px_20px_rgba(63,91,75,0.05)]">
       <div className="flex h-[30px] w-full items-center justify-between gap-6">
         <h2 className="flex h-[30px] items-center text-[20px] font-medium leading-[30px] text-[#111C2D]">
           Recent Activity Feed
         </h2>
-        <button
-          type="button"
-          className="flex h-[25.59px] items-center text-center text-[16px] font-normal leading-[26px] text-[#46624E] hover:text-[#314D3D]"
-        >
-          View All
-        </button>
+        <span className="text-[13px] font-medium text-[#6F826C]">
+          Live activity
+        </span>
       </div>
 
-      <div className="relative flex h-[252.36px] w-full flex-col items-start gap-6">
-        <span className="absolute bottom-[7.98px] left-[11px] top-2 w-px bg-[#C2C8C0]" />
-        {activities.map((activity, index) => (
-          <div
-            key={activity.title}
-            className="relative z-[1] flex h-[45.09px] w-full items-start pl-8"
-          >
-            <span
-              className={`absolute left-0 top-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${activity.tone}`}
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 13 10"
-                className={`h-[9.33px] ${
-                  index === 2 ? "w-[11.67px]" : "w-[12.83px]"
-                } ${
-                  index === 0
-                    ? "text-white"
-                    : index === 2
-                      ? "text-[#605872]"
-                      : index === 3
-                        ? "text-[#BA1A1A]"
-                        : "text-[#46624E]"
-                }`}
-              >
-                <path
-                  d="M1 5.1 4.6 8.5 12 1"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                />
-              </svg>
-            </span>
-            <div className="min-w-0">
-              <p
-                className={`truncate text-[16px] leading-[26px] text-[#111C2D] ${
-                  index === 0 ? "font-bold" : "font-normal"
-                }`}
-              >
-                {activity.title}
-              </p>
-              <p className="text-[13px] font-normal leading-5 text-[#424843] opacity-60">
-                {activity.time}
-              </p>
+      {isLoading ? (
+        <div className="w-full space-y-5">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="flex items-start gap-4">
+              <span className="mt-1 h-[22px] w-[22px] rounded-full bg-[#EEF2EE]" />
+              <div className="min-w-0 flex-1">
+                <div className="h-4 w-3/5 rounded bg-[#EEF2EE]" />
+                <div className="mt-3 h-3 w-2/5 rounded bg-[#F3F5F2]" />
+              </div>
             </div>
+          ))}
+        </div>
+      ) : error ? (
+        <p className="w-full rounded-lg border border-[#E7D7D7] bg-[#FFF8F8] px-4 py-3 text-[13px] font-medium text-[#A63C3C]">
+          {getApiErrorMessage(error, "Recent activities could not be loaded.")}
+        </p>
+      ) : activities.length === 0 ? (
+        <div className="flex w-full flex-1 items-center justify-center rounded-[14px] border border-dashed border-[#D7DDD5] bg-[#FBFCFA] px-6 py-12 text-center">
+          <div>
+            <p className="text-[16px] font-semibold text-[#2D384B]">
+              No recent activities yet
+            </p>
+            <p className="mt-2 max-w-[360px] text-[14px] leading-6 text-[#6E776E]">
+              Activity updates will appear here as new events happen across the platform.
+            </p>
           </div>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="relative flex w-full flex-col gap-6">
+          <span className="absolute bottom-2 left-[11px] top-2 w-px bg-[#C2C8C0]" />
+          {activities.map((activity) => {
+            const tone = getActivityFeedTone(activity);
+
+            return (
+              <div
+                key={activity.id}
+                className="relative z-[1] flex min-h-[52px] w-full items-start pl-8"
+              >
+                <span
+                  className={`absolute left-0 top-1 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full ${tone.bubbleClass}`}
+                >
+                  <HugeiconsIcon icon={tone.icon} size={13} strokeWidth={2} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[16px] font-semibold leading-[24px] text-[#111C2D]">
+                    {activity.message}
+                  </p>
+                  <p className="mt-1 text-[13px] font-normal leading-5 text-[#667066]">
+                    {getActivityFeedDetails(activity)}
+                  </p>
+                  <p className="text-[12px] font-medium leading-5 text-[#8C948D]">
+                    {formatRelativeActivityTime(activity.createdAt)}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </article>
   );
 }
@@ -1342,6 +1411,7 @@ function UserManagementContent() {
   );
   const [planFilter, setPlanFilter] = useState<"All" | PublicUser["role"]>("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const pageSize = 20;
@@ -1369,6 +1439,34 @@ function UserManagementContent() {
   const totalPages = pagination?.totalPages ?? 1;
   const currentPage = pagination?.page ?? page;
   const pageUsers = filteredUsers;
+
+  useEffect(() => {
+    if (!filtersOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (filtersPanelRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setFiltersOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setFiltersOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [filtersOpen]);
 
   function resetFilters() {
     setStatusFilter("All");
@@ -1425,7 +1523,10 @@ function UserManagementContent() {
             </p>
           </div>
 
-          <div className="relative flex flex-wrap items-center gap-3 xl:pt-9">
+          <div
+            ref={filtersPanelRef}
+            className="relative flex flex-wrap items-center gap-3 xl:pt-9"
+          >
             <label className="flex h-10 min-w-[220px] items-center rounded-lg border border-[#E2E6EA] bg-white px-3 shadow-sm">
               <input
                 value={search}
@@ -2022,6 +2123,7 @@ function EarningsManagementContent() {
     "All" | TransactionRecord["status"]
   >("All");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [selectedTransaction, setSelectedTransaction] =
     useState<TransactionRecord | null>(null);
@@ -2049,6 +2151,34 @@ function EarningsManagementContent() {
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
+
+  useEffect(() => {
+    if (!filtersOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (filtersPanelRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setFiltersOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setFiltersOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [filtersOpen]);
 
   function exportTransactions() {
     const headers = [
@@ -2123,7 +2253,10 @@ function EarningsManagementContent() {
             </p>
           </div>
 
-          <div className="relative flex flex-wrap items-center gap-3 xl:pt-9">
+          <div
+            ref={filtersPanelRef}
+            className="relative flex flex-wrap items-center gap-3 xl:pt-9"
+          >
             <div className="flex h-10 overflow-hidden rounded-lg border border-[#E2E6EA] bg-white p-1 shadow-sm">
               {(["All Users", "Internal"] as const).map((item) => (
                 <button

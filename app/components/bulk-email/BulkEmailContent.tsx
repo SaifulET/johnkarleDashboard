@@ -13,8 +13,14 @@ import {
   MailSend01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
-import { getApiErrorMessage, useGetAdminUsersQuery, useSendBulkEmailMutation } from "../../../lib/api";
-import type { PublicUser } from "../../../lib/types";
+import {
+  getApiErrorMessage,
+  useGetAdminEmailTemplateByIdQuery,
+  useGetAdminEmailTemplatesQuery,
+  useGetAdminUsersQuery,
+  useSendBulkEmailMutation,
+} from "../../../lib/api";
+import type { AdminEmailTemplate, PublicUser } from "../../../lib/types";
 
 type AttachmentFile = {
   id: string;
@@ -25,11 +31,16 @@ type AttachmentFile = {
 
 export function BulkEmailContent() {
   const { data, isLoading } = useGetAdminUsersQuery({ page: 1, limit: 50 });
+  const {
+    data: emailTemplatesData,
+    isLoading: isTemplatesLoading,
+  } = useGetAdminEmailTemplatesQuery({ page: 1, limit: 100 });
   const [sendBulkEmail, { isLoading: isSending }] = useSendBulkEmailMutation();
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [subject, setSubject] = useState("Exciting New Updates to Your Workspace");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<AttachmentFile[]>([
@@ -44,6 +55,11 @@ export function BulkEmailContent() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const audience = data?.users ?? [];
+  const emailTemplates = emailTemplatesData?.templates ?? [];
+  const { data: selectedTemplateData } = useGetAdminEmailTemplateByIdQuery(
+    selectedTemplateId,
+    { skip: !selectedTemplateId },
+  );
 
   const filteredAudience = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -70,17 +86,39 @@ export function BulkEmailContent() {
     audience.length > 0 && audience.every((person) => selectedIds.includes(person.id));
 
   useEffect(() => {
+    if (!emailTemplates.length || selectedTemplateId) {
+      return;
+    }
+
+    setSelectedTemplateId(emailTemplates[0].id);
+  }, [emailTemplates, selectedTemplateId]);
+
+  useEffect(() => {
     if (!editorRef.current) {
       return;
     }
 
-    editorRef.current.innerHTML = `
-      <p><strong>Hi there,</strong></p>
-      <p>We have important platform updates to share with your workspace.</p>
-      <p>Please review the latest dashboard notices and contact the admin team if you need support.</p>
-      <p>Best regards,<br />The Lineage Team</p>
-    `;
+    editorRef.current.innerHTML = toEditorHtml(
+      `Hi there,
+
+We have important platform updates to share with your workspace.
+Please review the latest dashboard notices and contact the admin team if you need support.
+
+Best regards,
+The Lineage Team`,
+    );
   }, []);
+
+  useEffect(() => {
+    const template = selectedTemplateData?.template;
+
+    if (!template || !editorRef.current) {
+      return;
+    }
+
+    setSubject(template.subjectLine);
+    editorRef.current.innerHTML = toEditorHtml(template.content);
+  }, [selectedTemplateData]);
 
   function toggleRecipient(id: string) {
     setSelectedIds((currentIds) =>
@@ -319,14 +357,32 @@ export function BulkEmailContent() {
             </div>
           </div>
 
-          <FormSelect
-            label="Select Template"
-            options={[
-              "Monthly Product Update",
-              "Renewal Reminder",
-              "Feature Announcement",
-            ]}
-          />
+          <label className="block">
+            <span className="text-[14px] font-normal leading-5 text-[#475569]">
+              Email Template
+            </span>
+            <select
+              value={selectedTemplateId}
+              onChange={(event) => setSelectedTemplateId(event.target.value)}
+              disabled={isTemplatesLoading || emailTemplates.length === 0}
+              className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[14px] font-normal leading-5 text-[#191C1F] outline-none transition focus:border-[#66785F] focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {emailTemplates.length === 0 ? (
+                <option value="">No templates available</option>
+              ) : (
+                emailTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.templateName}
+                  </option>
+                ))
+              )}
+            </select>
+            {selectedTemplateId && selectedTemplateData?.template ? (
+              <p className="mt-2 text-[12px] font-medium text-[#7B827B]">
+                Using template: {selectedTemplateData.template.templateName}
+              </p>
+            ) : null}
+          </label>
 
           <label className="block">
             <span className="text-[14px] font-normal leading-5 text-[#475569]">
@@ -489,6 +545,22 @@ export function BulkEmailContent() {
   );
 }
 
+function toEditorHtml(content: string) {
+  return content
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function StatusPill({ user }: { user: PublicUser }) {
   const className =
     user.role === "super_admin"
@@ -510,21 +582,6 @@ function StatusPill({ user }: { user: PublicUser }) {
     >
       {label}
     </span>
-  );
-}
-
-function FormSelect({ label, options }: { label: string; options: string[] }) {
-  return (
-    <label className="block">
-      <span className="text-[14px] font-normal leading-5 text-[#475569]">
-        {label}
-      </span>
-      <select className="mt-2 h-11 w-full rounded-lg border border-[#E2E6EA] bg-[#F8FAFD] px-4 text-[14px] font-normal leading-5 text-[#191C1F] outline-none transition focus:border-[#66785F] focus:bg-white">
-        {options.map((option) => (
-          <option key={option}>{option}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 
