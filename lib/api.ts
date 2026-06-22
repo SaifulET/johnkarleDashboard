@@ -53,7 +53,7 @@ type ApiPaginatedEnvelope<T> = {
 const unwrapEnvelope = <T>(response: ApiEnvelope<T>) => response.data;
 
 const baseUrl =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:5000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "https://johnkarle-backend.onrender.com/api/v1";
 
 const rawBaseQuery = fetchBaseQuery({
   baseUrl,
